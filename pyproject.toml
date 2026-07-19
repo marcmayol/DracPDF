@@ -30,6 +30,10 @@ packages = ["src/lectorpdf"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+filterwarnings = [
+    # Overload deprecado de QMouseEvent usado al sintetizar eventos en tests.
+    "ignore:.*QMouseEvent.*:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

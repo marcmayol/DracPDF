@@ -6,9 +6,13 @@ con curvas (ver `suavizado`) y los pinta sobre un fondo transparente.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
+import math
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODeviceBase, QPointF, Qt
 from PySide6.QtGui import (
     QColor,
+    QImage,
+    QImageWriter,
     QMouseEvent,
     QPainter,
     QPainterPath,
@@ -21,6 +25,7 @@ from lectorpdf.ui.signature.suavizado import Punto, curva_catmull_rom
 
 _ANCHO_TRAZO = 2.8
 _COLOR_TRAZO = QColor(15, 23, 42)  # tinta azul muy oscura
+_MARGEN_EXPORT = 8
 
 
 class SignatureCanvas(QWidget):
@@ -44,6 +49,36 @@ class SignatureCanvas(QWidget):
     def trazos(self) -> list[list[Punto]]:
         """Copia de los trazos como puntos (para tests/diagnóstico)."""
         return [[(p.x(), p.y()) for p in trazo] for trazo in self._trazos]
+
+    def exportar_png(self, margen: int = _MARGEN_EXPORT) -> bytes:
+        """Renderiza los trazos a un PNG recortado, con fondo transparente."""
+        if self.esta_vacio():
+            raise ValueError("El lienzo está vacío: no hay firma que exportar")
+        x0, y0, x1, y1 = self._caja_trazos()
+        borde = margen + _ANCHO_TRAZO
+        ancho = math.ceil(x1 - x0 + 2 * borde)
+        alto = math.ceil(y1 - y0 + 2 * borde)
+
+        imagen = QImage(ancho, alto, QImage.Format.Format_ARGB32)
+        imagen.fill(Qt.GlobalColor.transparent)
+        pintor = QPainter(imagen)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pintor.translate(borde - x0, borde - y0)
+        self._pintar_trazos(pintor)
+        pintor.end()
+
+        datos = QByteArray()
+        buffer = QBuffer(datos)
+        buffer.open(QIODeviceBase.OpenModeFlag.WriteOnly)
+        escritor = QImageWriter(buffer, QByteArray(b"PNG"))
+        escritor.write(imagen)
+        return bytes(datos.data())
+
+    def _caja_trazos(self) -> tuple[float, float, float, float]:
+        puntos = [p for trazo in self._trazos for p in trazo]
+        xs = [p.x() for p in puntos]
+        ys = [p.y() for p in puntos]
+        return min(xs), min(ys), max(xs), max(ys)
 
     # -- Captura ------------------------------------------------------------
 
