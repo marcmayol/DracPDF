@@ -40,9 +40,11 @@ from lectorpdf.core.domain.firma_digital import (
     ResultadoVerificacion,
 )
 
-# pyHanko registra con traceback las modificaciones sospechosas al verificar;
-# se refleja en el estado, así que se baja el ruido de ese logger.
-logging.getLogger("pyhanko.sign.diff_analysis").setLevel(logging.CRITICAL)
+# pyHanko registra con traceback las incidencias de validación (modificaciones
+# sospechosas, autofirmados sin confianza…); ya se reflejan en el ResultadoVerificacion,
+# así que se baja el ruido de sus loggers.
+for _logger in ("pyhanko", "pyhanko_certvalidator"):
+    logging.getLogger(_logger).setLevel(logging.CRITICAL)
 
 
 class PyHankoSignatureService:

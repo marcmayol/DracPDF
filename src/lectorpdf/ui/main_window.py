@@ -25,9 +25,11 @@ from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
+from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
+from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
@@ -38,6 +40,8 @@ from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
     directorio_por_defecto,
 )
+from lectorpdf.ui.signature.digital_seal_layer import DigitalSealLayer
+from lectorpdf.ui.signature.digital_signature_dialog import DigitalSignatureDialog
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
@@ -63,6 +67,7 @@ class MainWindow(QMainWindow):
         self._rellenar = RellenarCampo(self._servicio_form)
         self._guardar_form = GuardarFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
+        self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
 
         self._documento: Documento | None = None
@@ -71,6 +76,7 @@ class MainWindow(QMainWindow):
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._capa_form = FormLayer(self._visor, self._rellenar)
         self._capa_firma = SignatureLayer(self._visor, self._estampar)
+        self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
         self.setCentralWidget(self._visor)
 
@@ -116,8 +122,9 @@ class MainWindow(QMainWindow):
         self._accion(barra, "Ajustar página", self._visor.ajustar_a_pagina)
         barra.addSeparator()
         self._accion(barra, "Firmar…", self._iniciar_firma)
+        self._accion(barra, "Firmar digital…", self._firmar_digitalmente)
         self._accion(barra, "✓ Colocar", self._confirmar_firma)
-        self._accion(barra, "✗ Cancelar firma", self._capa_firma.cancelar)
+        self._accion(barra, "✗ Cancelar", self._cancelar_colocacion)
         barra.addSeparator()
         self._accion(barra, "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
@@ -180,10 +187,62 @@ class MainWindow(QMainWindow):
             self._capa_firma.iniciar_colocacion(self._documento, png)
 
     def _confirmar_firma(self) -> None:
+        if self._capa_sello.colocando():
+            try:
+                self._capa_sello.confirmar()
+            except ErrorDominio as exc:
+                QMessageBox.warning(self, "No se pudo firmar", str(exc))
+                return
+            self._tras_firmar()
+            return
         try:
             self._capa_firma.confirmar()
         except ErrorDominio as exc:
             QMessageBox.warning(self, "No se pudo estampar la firma", str(exc))
+
+    def _cancelar_colocacion(self) -> None:
+        self._capa_firma.cancelar()
+        self._capa_sello.cancelar()
+
+    def _firmar_digitalmente(self) -> None:
+        if self._documento is None:
+            return
+        if self._guardar_form.hay_cambios_sin_guardar(self._documento):
+            QMessageBox.information(
+                self,
+                "Cambios sin guardar",
+                "Se guardarán los cambios pendientes y luego se firmará el fichero.",
+            )
+        dialogo = DigitalSignatureDialog(self)
+        if dialogo.exec() != DigitalSignatureDialog.DialogCode.Accepted:
+            return
+        credencial = dialogo.credencial()
+        if credencial is None:
+            return
+        if dialogo.sello_visible():
+            self._capa_sello.iniciar_colocacion(
+                self._documento, credencial, dialogo.razon()
+            )
+            return
+        # Firma invisible: en la página actual, sin sello.
+        config = ConfigFirma(pagina=self._visor.pagina_actual(), razon=dialogo.razon())
+        try:
+            self._firmar_digital.ejecutar(self._documento, config, credencial)
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo firmar", str(exc))
+            return
+        for indice in range(self._documento.num_paginas):
+            self._visor.invalidar_pagina(indice)
+        self._tras_firmar()
+
+    def _tras_firmar(self) -> None:
+        """El documento queda firmado: se bloquea la edición de formularios y se
+        actualiza el panel de verificación."""
+        if self._documento is None:
+            return
+        self._capa_form.set_campos((), documento=self._documento)
+        resultados = self._verificar.ejecutar(self._documento, [])
+        self._panel_verificacion.mostrar(resultados)
 
     def _verificar_firmas(self) -> None:
         if self._documento is None:
