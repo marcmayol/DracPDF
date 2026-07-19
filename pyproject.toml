@@ -1,9 +1,15 @@
 [project]
 name = "lectorpdf"
 version = "0.1.0"
-description = "Visor de PDF con firma y rellenado de formularios (arquitectura hexagonal)"
+description = "DracPDF — visor de PDF con rellenado de formularios y firma digital"
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [{ name = "Marc Mayol", email = "marcmayolorell@gmail.com" }]
+license = { text = "Proprietary (all rights reserved). See LICENSE." }
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Private :: Do Not Upload",
+]
 dependencies = [
     "pyside6>=6.7",
     "pymupdf>=1.24",
