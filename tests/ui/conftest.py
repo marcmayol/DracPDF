@@ -21,3 +21,13 @@ def qapp() -> Iterator[QApplication]:
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _limpiar_stylesheet() -> Iterator[None]:
+    """Evita que un test que aplica un tema deje el QSS puesto para los demás
+    (el QSS altera tamaños mínimos y descuadraría tests de geometría)."""
+    yield
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        app.setStyleSheet("")
