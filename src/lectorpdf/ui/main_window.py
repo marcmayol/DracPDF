@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
     QFileDialog,
+    QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -38,6 +40,7 @@ from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
+from lectorpdf.core.use_cases.proteger_pdf import ProtegerPdf
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.core.use_cases.unir_pdf import UnirPdf
@@ -92,6 +95,7 @@ class MainWindow(QMainWindow):
         self._unir = UnirPdf(self._servicio_herr)
         self._organizar = OrganizarPaginas(self._servicio_herr)
         self._dividir = DividirPdf(self._servicio_herr)
+        self._proteger = ProtegerPdf(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -179,6 +183,8 @@ class MainWindow(QMainWindow):
         menu = self.menuBar().addMenu("Herramientas")
         self._accion_menu(menu, "Unir PDF…", self._menu_unir)
         self._accion_menu(menu, "Dividir PDF…", self._menu_dividir)
+        menu.addSeparator()
+        self._accion_menu(menu, "Proteger con contraseña…", self._menu_proteger)
 
     def _accion_menu(
         self, menu: QMenu, texto: str, callback: Callable[[], None]
@@ -454,6 +460,28 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Hecho", f"Generados {len(rutas)} ficheros en:\n{salida}"
         )
+
+    def _menu_proteger(self) -> None:
+        doc = self._documento_o_aviso("Proteger")
+        if doc is None:
+            return
+        contrasena, ok = QInputDialog.getText(
+            self, "Proteger con contraseña", "Contraseña:", QLineEdit.EchoMode.Password
+        )
+        if not ok or not contrasena:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF protegido", "protegido.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self,
+            "Protegiendo PDF…",
+            lambda p: self._proteger.ejecutar(doc, destino, contrasena),
+        )
+        self._tras_tarea(res, f"PDF protegido guardado en:\n{destino}")
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

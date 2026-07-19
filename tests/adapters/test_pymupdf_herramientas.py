@@ -131,3 +131,46 @@ def test_dividir_por_rangos_genera_ficheros(tmp_path: Path) -> None:
     assert parte1[0].get_text().strip() == "A"
     parte1.close()
     registro.cerrar(doc_id)
+
+
+# -- Proteger / desproteger -------------------------------------------------
+
+
+def test_proteger_genera_pdf_cifrado(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["SECRETO"]))
+    destino = tmp_path / "prot.pdf"
+
+    servicio.proteger(doc_id, destino, "clave")
+
+    reabierto = fitz.open(destino)
+    assert reabierto.needs_pass
+    assert reabierto.authenticate("clave")
+    reabierto.close()
+    registro.cerrar(doc_id)
+
+
+def test_desproteger_con_contrasena_correcta(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["SECRETO"]))
+    prot = tmp_path / "prot.pdf"
+    servicio.proteger(doc_id, prot, "clave")
+    registro.cerrar(doc_id)
+
+    desp = tmp_path / "desp.pdf"
+    _servicio().desproteger(prot, "clave", desp)
+
+    reabierto = fitz.open(desp)
+    assert not reabierto.needs_pass
+    assert reabierto[0].get_text().strip() == "SECRETO"
+    reabierto.close()
+
+
+def test_desproteger_contrasena_incorrecta(tmp_path: Path) -> None:
+    from lectorpdf.core.domain.errores import ContrasenaIncorrecta
+
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["S"]))
+    prot = tmp_path / "prot.pdf"
+    servicio.proteger(doc_id, prot, "clave")
+    registro.cerrar(doc_id)
+
+    with pytest.raises(ContrasenaIncorrecta):
+        _servicio().desproteger(prot, "mala", tmp_path / "x.pdf")
