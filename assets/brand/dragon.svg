@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Marca interina DracPDF: silueta angular de dragón mirando a la derecha,
+       tinta (#111318) sobre teja roja de la paleta "Ladón" (#E0534A).
+       Reemplazable por los PNG afinados del diseño cuando se coloquen. -->
+  <rect width="256" height="256" rx="52" fill="#E0534A"/>
+  <path fill="#111318" d="
+    M56 182
+    L64 156 L48 146 L74 134 L60 122 L92 110
+    L98 74 L118 108
+    L130 66 L146 110
+    L182 122 L214 142
+    L168 148 L206 162
+    L150 168 L132 160
+    L142 194 L120 172
+    L94 182
+    Z
+  "/>
+  <circle cx="150" cy="126" r="8" fill="#E0534A"/>
+</svg>

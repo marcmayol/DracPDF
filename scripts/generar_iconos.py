@@ -1,9 +1,13 @@
-"""Genera los iconos de la aplicación a partir de los PNG de marca.
+"""Genera los iconos de la aplicación a partir de la marca.
 
-Fuente (versionada): los PNG afinados a mano por tamaño del diseño "Ladón" en
-`assets/brand/png/icon-{16,32,48,256}.png`.
+Fuente (versionada), por orden de preferencia:
+  1. PNG afinados a mano por tamaño en `assets/brand/png/icon-{16,32,48,256}.png`
+     (los del diseño "Ladón"; mejores a tamaño pequeño).
+  2. Si faltan, el SVG de marca `assets/brand/dragon.svg` (marca interina
+     vectorial), que se rasteriza a cada tamaño.
+
 Salida (derivada, NO versionada, en `build/icons/`):
-  - `ladon.ico`  : icono multiresolución de Windows (16/32/48/256), PNG-in-ICO.
+  - `ladon.ico`     : icono multiresolución de Windows (16/32/48/256), PNG-in-ICO.
   - `ladon-{n}.png` : copias por tamaño para Linux (hicolor).
 
 Uso:
@@ -12,12 +16,16 @@ Uso:
 
 from __future__ import annotations
 
-import shutil
+import os
 import struct
 from pathlib import Path
 
+# Rasterizar el SVG sin pantalla real.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 RAIZ = Path(__file__).resolve().parents[1]
-ORIGEN = RAIZ / "assets" / "brand" / "png"
+ORIGEN_PNG = RAIZ / "assets" / "brand" / "png"
+ORIGEN_SVG = RAIZ / "assets" / "brand" / "dragon.svg"
 DESTINO = RAIZ / "build" / "icons"
 TAMANOS = (16, 32, 48, 256)
 
@@ -40,32 +48,68 @@ def _construir_ico(imagenes: list[tuple[int, bytes]]) -> bytes:
     return cabecera + entradas + datos
 
 
+def _png_desde_svg(tamano: int) -> bytes:
+    from PySide6.QtCore import QBuffer, QByteArray, QIODeviceBase, Qt
+    from PySide6.QtGui import QImage, QImageWriter, QPainter
+    from PySide6.QtSvg import QSvgRenderer
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.instance() or QApplication([])
+    renderizador = QSvgRenderer(str(ORIGEN_SVG))
+    imagen = QImage(tamano, tamano, QImage.Format.Format_ARGB32)
+    imagen.fill(Qt.GlobalColor.transparent)
+    pintor = QPainter(imagen)
+    renderizador.render(pintor)
+    pintor.end()
+
+    datos = QByteArray()
+    buffer = QBuffer(datos)
+    buffer.open(QIODeviceBase.OpenModeFlag.WriteOnly)
+    QImageWriter(buffer, QByteArray(b"PNG")).write(imagen)
+    return bytes(datos.data())
+
+
+def _png_para(tamano: int) -> bytes | None:
+    afinado = ORIGEN_PNG / f"icon-{tamano}.png"
+    if afinado.is_file():
+        return afinado.read_bytes()
+    if ORIGEN_SVG.is_file():
+        return _png_desde_svg(tamano)
+    return None
+
+
 def main() -> int:
-    faltan = [t for t in TAMANOS if not (ORIGEN / f"icon-{t}.png").is_file()]
+    imagenes: list[tuple[int, bytes]] = []
+    faltan = []
+    for tamano in TAMANOS:
+        png = _png_para(tamano)
+        if png is None:
+            faltan.append(tamano)
+        else:
+            imagenes.append((tamano, png))
+
     if faltan:
-        print("FALTAN los PNG de marca fuente en:", ORIGEN)
-        for t in faltan:
-            print(f"  - icon-{t}.png")
+        print("No hay fuente de marca para los tamaños:", faltan)
         print(
-            "Descárgalos del proyecto de Claude Design (assets/brand/png/) y vuelve a "
-            "ejecutar. Son la fuente versionada del icono."
+            "Coloca los PNG en assets/brand/png/ o el SVG en "
+            "assets/brand/dragon.svg y vuelve a ejecutar."
         )
         return 1
 
+    usa_afinados = (ORIGEN_PNG / "icon-256.png").is_file()
     DESTINO.mkdir(parents=True, exist_ok=True)
-    imagenes: list[tuple[int, bytes]] = []
     generados: list[Path] = []
-    for tamano in TAMANOS:
-        png = (ORIGEN / f"icon-{tamano}.png").read_bytes()
-        imagenes.append((tamano, png))
-        salida_png = DESTINO / f"ladon-{tamano}.png"
-        shutil.copyfile(ORIGEN / f"icon-{tamano}.png", salida_png)
-        generados.append(salida_png)
+    for tamano, png in imagenes:
+        salida = DESTINO / f"ladon-{tamano}.png"
+        salida.write_bytes(png)
+        generados.append(salida)
 
     ico = DESTINO / "ladon.ico"
     ico.write_bytes(_construir_ico(imagenes))
     generados.insert(0, ico)
 
+    fuente = "PNG afinados del diseño" if usa_afinados else "SVG de marca interino"
+    print(f"Fuente: {fuente}")
     print(f"Iconos generados en {DESTINO}:")
     for ruta in generados:
         print(f"  - {ruta.name} ({ruta.stat().st_size} bytes)")

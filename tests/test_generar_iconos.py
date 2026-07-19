@@ -43,12 +43,15 @@ def test_construir_ico_cabecera_entradas_y_datos() -> None:
     assert png_16 in ico and png_256 in ico
 
 
-def test_main_avisa_si_faltan_los_png_fuente(capsys) -> None:  # type: ignore[no-untyped-def]
+def test_main_genera_iconos_desde_el_svg_interino(capsys) -> None:  # type: ignore[no-untyped-def]
     mod = _cargar_script()
-    # Si los PNG de marca no están, el script sale con código 1 y explica qué falta.
+    # Con el SVG de marca presente (assets/brand/dragon.svg), el script genera el
+    # .ico y los PNG por tamaño y sale con código 0.
     codigo = mod.main()
     salida = capsys.readouterr().out
-    if codigo == 1:
-        assert "FALTAN" in salida
-    else:
-        assert "Iconos generados" in salida
+
+    assert codigo == 0
+    assert "Iconos generados" in salida
+    for nombre in ("ladon.ico", "ladon-16.png", "ladon-256.png"):
+        assert nombre in salida
+    assert (mod.DESTINO / "ladon.ico").is_file()

@@ -15,19 +15,26 @@ NOMBRE_APP = "DracPDF"
 _RAIZ = Path(__file__).resolve().parents[4]
 _DIR_BRAND = _RAIZ / "assets" / "brand"
 _DIR_ICONOS_BUILD = _RAIZ / "build" / "icons"
+_SVG_INTERINO = _DIR_BRAND / "dragon.svg"
 
 
 def ruta_icono_app() -> Path | None:
-    """.ico multiresolución si ya se generó; si no, el PNG de 256 fuente."""
-    ico = _DIR_ICONOS_BUILD / "ladon.ico"
-    if ico.is_file():
-        return ico
-    png = _DIR_BRAND / "png" / "icon-256.png"
-    return png if png.is_file() else None
+    """.ico multiresolución si ya se generó; si no, el PNG de 256 o el SVG interino."""
+    for candidata in (
+        _DIR_ICONOS_BUILD / "ladon.ico",
+        _DIR_BRAND / "png" / "icon-256.png",
+        _SVG_INTERINO,
+    ):
+        if candidata.is_file():
+            return candidata
+    return None
 
 
 def ruta_logo(es_oscuro: bool) -> Path | None:
-    """Silueta del dragón: negativo (blanca) sobre tema oscuro, tinta en claro."""
+    """Logo para el "acerca de": silueta del dragón (negativo blanco sobre tema
+    oscuro, tinta en claro) o, si aún no está, el SVG de marca interino."""
     nombre = "dragon-silhouette-white.png" if es_oscuro else "dragon-silhouette.png"
-    ruta = _DIR_BRAND / nombre
-    return ruta if ruta.is_file() else None
+    raster = _DIR_BRAND / nombre
+    if raster.is_file():
+        return raster
+    return _SVG_INTERINO if _SVG_INTERINO.is_file() else None
