@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt
-from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
@@ -20,10 +20,16 @@ from PySide6.QtWidgets import (
 )
 
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
-from lectorpdf.core.domain.errores import ErrorDominio
+from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
+from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
+from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
@@ -33,12 +39,22 @@ _TITULO_BASE = "lectorpdf"
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self._repositorio = PyMuPDFDocumentRepository()
+        # Raíz de composición: un registro compartido para todos los adaptadores.
+        self._registro = RegistroDocumentos()
+        self._repositorio = PyMuPDFDocumentRepository(self._registro)
+        self._servicio_form = PyMuPDFFormService(self._registro)
+
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
+        self._listar = ListarCampos(self._servicio_form)
+        self._rellenar = RellenarCampo(self._servicio_form)
+        self._guardar_form = GuardarFormulario(self._servicio_form)
+
+        self._documento: Documento | None = None
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
+        self._capa_form = FormLayer(self._visor, self._rellenar)
         self.setCentralWidget(self._visor)
 
         self._construir_dock_miniaturas()
@@ -65,6 +81,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(barra)
 
         self._accion(barra, "Abrir…", self._abrir_por_dialogo)
+        self._accion(barra, "Guardar", self._guardar)
         barra.addSeparator()
         self._accion(barra, "◀ Anterior", self._visor.pagina_anterior)
         self._accion(barra, "Siguiente ▶", self._visor.pagina_siguiente)
@@ -90,12 +107,37 @@ class MainWindow(QMainWindow):
 
     def abrir_ruta(self, ruta: Path) -> Documento:
         documento = self._abrir.ejecutar(ruta)
+        self._documento = documento
         self._visor.set_documento(documento)
         self._miniaturas.set_documento(documento)
+        self._cargar_formulario(documento)
         nombre = documento.titulo or ruta.name
         self.setWindowTitle(f"{nombre} — {_TITULO_BASE}")
         self._actualizar_etiqueta(0)
         return documento
+
+    def _cargar_formulario(self, documento: Documento) -> None:
+        """Lista los campos y los pasa al overlay; avisa si el PDF es XFA."""
+        try:
+            campos = self._listar.ejecutar(documento)
+        except FormularioXFANoSoportado:
+            self._capa_form.set_campos((), documento=documento)
+            QMessageBox.warning(
+                self,
+                "Formulario no soportado",
+                "Este PDF usa formularios XFA, no soportados. Se abre solo como "
+                "visor; no se pueden rellenar sus campos.",
+            )
+            return
+        self._capa_form.set_campos(campos, documento=documento)
+
+    def _guardar(self) -> None:
+        if self._documento is None:
+            return
+        try:
+            self._guardar_form.ejecutar(self._documento)
+        except Exception as exc:  # errores de E/S de PyMuPDF al guardar
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""
@@ -117,6 +159,28 @@ class MainWindow(QMainWindow):
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
         self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self._documento is not None and self._guardar_form.hay_cambios_sin_guardar(
+            self._documento
+        ):
+            respuesta = QMessageBox.question(
+                self,
+                "Cambios sin guardar",
+                "Hay cambios sin guardar. ¿Guardar antes de cerrar?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+            )
+            if respuesta == QMessageBox.StandardButton.Save:
+                self._guardar()
+                event.accept()
+            elif respuesta == QMessageBox.StandardButton.Discard:
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
     # -- Arrastrar y soltar -------------------------------------------------
 
