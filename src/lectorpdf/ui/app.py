@@ -8,11 +8,13 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from lectorpdf.ui.main_window import MainWindow
+from lectorpdf.ui.theme.estilos import aplicar_tema, cargar_tema_preferido
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     app = QApplication(argv)
+    aplicar_tema(app, cargar_tema_preferido())
 
     ventana = MainWindow()
     ventana.show()

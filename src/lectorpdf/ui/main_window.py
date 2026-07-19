@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QMimeData, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QDockWidget,
     QFileDialog,
     QLabel,
@@ -45,6 +46,12 @@ from lectorpdf.ui.signature.digital_signature_dialog import DigitalSignatureDial
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
+from lectorpdf.ui.theme.estilos import (
+    aplicar_tema,
+    cargar_tema_preferido,
+    guardar_preferencia_tema,
+)
+from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
@@ -71,6 +78,7 @@ class MainWindow(QMainWindow):
         self._verificar = VerificarFirmas(self._servicio_firma)
 
         self._documento: Documento | None = None
+        self._tema = cargar_tema_preferido()
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
@@ -128,6 +136,7 @@ class MainWindow(QMainWindow):
         barra.addSeparator()
         self._accion(barra, "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
+        self._accion(barra, "Cambiar tema", self._conmutar_tema)
         barra.addWidget(self._etiqueta_pagina)
 
     def _accion(self, barra: QToolBar, texto: str, callback: Callable[[], None]) -> None:
@@ -273,6 +282,14 @@ class MainWindow(QMainWindow):
         )
         if ruta_str:
             self.abrir_ruta_con_aviso(Path(ruta_str))
+
+    def _conmutar_tema(self) -> None:
+        nuevo = TEMA_CLARO if self._tema.es_oscuro else TEMA_OSCURO
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            aplicar_tema(app, nuevo)
+        guardar_preferencia_tema(nuevo.nombre)
+        self._tema = nuevo
 
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
