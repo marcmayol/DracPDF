@@ -51,6 +51,7 @@ from lectorpdf.ui.theme.estilos import (
     cargar_tema_preferido,
     guardar_preferencia_tema,
 )
+from lectorpdf.ui.theme.iconos import icono
 from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
+        self._acciones_icono: list[tuple[QAction, str]] = []
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
@@ -118,23 +120,23 @@ class MainWindow(QMainWindow):
         barra = QToolBar("Navegación", self)
         self.addToolBar(barra)
 
-        self._accion(barra, "Abrir…", self._abrir_por_dialogo)
-        self._accion(barra, "Guardar", self._guardar)
+        self._accion_icono(barra, "open", "Abrir…", self._abrir_por_dialogo)
+        self._accion_icono(barra, "save", "Guardar", self._guardar)
         barra.addSeparator()
-        self._accion(barra, "◀ Anterior", self._visor.pagina_anterior)
-        self._accion(barra, "Siguiente ▶", self._visor.pagina_siguiente)
+        self._accion_icono(barra, "page-prev", "Página anterior", self._visor.pagina_anterior)
+        self._accion_icono(barra, "page-next", "Página siguiente", self._visor.pagina_siguiente)
         barra.addSeparator()
-        self._accion(barra, "− Alejar", self._visor.zoom_alejar)
-        self._accion(barra, "+ Acercar", self._visor.zoom_acercar)
+        self._accion_icono(barra, "zoom-out", "Alejar", self._visor.zoom_alejar)
+        self._accion_icono(barra, "zoom-in", "Acercar", self._visor.zoom_acercar)
         self._accion(barra, "Ajustar ancho", self._visor.ajustar_a_ancho)
         self._accion(barra, "Ajustar página", self._visor.ajustar_a_pagina)
         barra.addSeparator()
-        self._accion(barra, "Firmar…", self._iniciar_firma)
-        self._accion(barra, "Firmar digital…", self._firmar_digitalmente)
+        self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
+        self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
         self._accion(barra, "✓ Colocar", self._confirmar_firma)
         self._accion(barra, "✗ Cancelar", self._cancelar_colocacion)
         barra.addSeparator()
-        self._accion(barra, "Verificar firmas", self._verificar_firmas)
+        self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
         self._accion(barra, "Cambiar tema", self._conmutar_tema)
         barra.addWidget(self._etiqueta_pagina)
@@ -143,6 +145,19 @@ class MainWindow(QMainWindow):
         accion = QAction(texto, self)
         accion.triggered.connect(callback)
         barra.addAction(accion)
+
+    def _accion_icono(
+        self,
+        barra: QToolBar,
+        nombre_icono: str,
+        tooltip: str,
+        callback: Callable[[], None],
+    ) -> None:
+        accion = QAction(icono(nombre_icono, self._tema.text), tooltip, self)
+        accion.setToolTip(tooltip)
+        accion.triggered.connect(callback)
+        barra.addAction(accion)
+        self._acciones_icono.append((accion, nombre_icono))
 
     def _conectar_senales(self) -> None:
         self._visor.pagina_cambiada.connect(self._miniaturas.seleccionar_pagina)
@@ -290,6 +305,8 @@ class MainWindow(QMainWindow):
             aplicar_tema(app, nuevo)
         guardar_preferencia_tema(nuevo.nombre)
         self._tema = nuevo
+        for accion, nombre_icono in self._acciones_icono:
+            accion.setIcon(icono(nombre_icono, self._tema.text))
 
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
