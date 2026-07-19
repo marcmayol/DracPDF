@@ -25,3 +25,7 @@ build/
 Thumbs.db
 *.p12
 *.pfx
+
+# Artefactos de empaquetado (PyInstaller)
+dist/
+*.spec

@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lectorpdf.recursos import base_recursos
+
 NOMBRE_APP = "DracPDF"
 
-_RAIZ = Path(__file__).resolve().parents[4]
-_DIR_BRAND = _RAIZ / "assets" / "brand"
-_DIR_ICONOS_BUILD = _RAIZ / "build" / "icons"
+_DIR_BRAND = base_recursos() / "assets" / "brand"
+_DIR_ICONOS_BUILD = base_recursos() / "build" / "icons"
 _SVG_INTERINO = _DIR_BRAND / "dragon.svg"
 
 

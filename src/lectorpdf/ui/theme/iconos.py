@@ -7,14 +7,13 @@ de un botón de 30×30.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-# assets/ vive en la raíz del repo (fuera del paquete).
-_DIR_ICONOS = Path(__file__).resolve().parents[4] / "assets" / "icons"
+from lectorpdf.recursos import base_recursos
+
+_DIR_ICONOS = base_recursos() / "assets" / "icons"
 _TAM_POR_DEFECTO = 20
 
 
