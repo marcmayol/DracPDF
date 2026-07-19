@@ -5,15 +5,22 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from lectorpdf.ui.main_window import MainWindow
 from lectorpdf.ui.theme.estilos import aplicar_tema, cargar_tema_preferido
+from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     app = QApplication(argv)
+    app.setApplicationName(NOMBRE_APP)
+    app.setApplicationDisplayName(NOMBRE_APP)
+    icono_app = ruta_icono_app()
+    if icono_app is not None:
+        app.setWindowIcon(QIcon(str(icono_app)))
     aplicar_tema(app, cargar_tema_preferido())
 
     ventana = MainWindow()

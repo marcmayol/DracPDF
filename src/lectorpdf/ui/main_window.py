@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -36,6 +36,7 @@ from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
+from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
@@ -52,11 +53,12 @@ from lectorpdf.ui.theme.estilos import (
     guardar_preferencia_tema,
 )
 from lectorpdf.ui.theme.iconos import icono
+from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
 from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
-_TITULO_BASE = "lectorpdf"
+_TITULO_BASE = NOMBRE_APP
 
 
 class MainWindow(QMainWindow):
@@ -99,7 +101,13 @@ class MainWindow(QMainWindow):
 
         self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
+        self._aplicar_icono_ventana()
         self.resize(1100, 1000)
+
+    def _aplicar_icono_ventana(self) -> None:
+        ruta = ruta_icono_app()
+        if ruta is not None:
+            self.setWindowIcon(QIcon(str(ruta)))
 
     # -- Construcción de la UI ----------------------------------------------
 
@@ -139,6 +147,7 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
         self._accion(barra, "Cambiar tema", self._conmutar_tema)
+        self._accion(barra, "Acerca de", self._mostrar_acerca_de)
         barra.addWidget(self._etiqueta_pagina)
 
     def _accion(self, barra: QToolBar, texto: str, callback: Callable[[], None]) -> None:
@@ -307,6 +316,9 @@ class MainWindow(QMainWindow):
         self._tema = nuevo
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
+
+    def _mostrar_acerca_de(self) -> None:
+        AboutDialog(self._tema.es_oscuro, self).exec()
 
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
