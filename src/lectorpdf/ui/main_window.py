@@ -32,8 +32,10 @@ from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
+from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
@@ -98,6 +100,7 @@ class MainWindow(QMainWindow):
         self._dividir = DividirPdf(self._servicio_herr)
         self._proteger = ProtegerPdf(self._servicio_herr)
         self._desproteger = DesprotegerPdf(self._servicio_herr)
+        self._comprimir = ComprimirPdf(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -188,6 +191,8 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Proteger con contraseña…", self._menu_proteger)
         self._accion_menu(menu, "Quitar contraseña…", self._menu_desproteger)
+        menu.addSeparator()
+        self._accion_menu(menu, "Comprimir…", self._menu_comprimir)
 
     def _accion_menu(
         self, menu: QMenu, texto: str, callback: Callable[[], None]
@@ -511,6 +516,31 @@ class MainWindow(QMainWindow):
             lambda p: self._desproteger.ejecutar(ruta, contrasena, destino),
         )
         self._tras_tarea(res, f"PDF sin protección guardado en:\n{destino}")
+
+    def _menu_comprimir(self) -> None:
+        doc = self._documento_o_aviso("Comprimir")
+        if doc is None:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF comprimido", "comprimido.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self, "Comprimiendo PDF…", lambda p: self._comprimir.ejecutar(doc, destino, p)
+        )
+        if res.cancelado or res.error is not None:
+            self._tras_tarea(res, "")
+            return
+        r = res.resultado
+        if isinstance(r, ResultadoCompresion):
+            QMessageBox.information(
+                self,
+                "Hecho",
+                f"Comprimido: {r.bytes_antes} → {r.bytes_despues} bytes "
+                f"({r.porcentaje_reduccion:.1f}% menos)\n{destino}",
+            )
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

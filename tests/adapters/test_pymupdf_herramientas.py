@@ -174,3 +174,26 @@ def test_desproteger_contrasena_incorrecta(tmp_path: Path) -> None:
 
     with pytest.raises(ContrasenaIncorrecta):
         _servicio().desproteger(prot, "mala", tmp_path / "x.pdf")
+
+
+# -- Comprimir --------------------------------------------------------------
+
+
+def test_comprimir_reduce_el_tamano(tmp_path: Path) -> None:
+    ruta = tmp_path / "grande.pdf"
+    doc = fitz.open()
+    for _ in range(40):
+        pagina = doc.new_page()
+        pagina.insert_text((40, 60), ("relleno " * 20 + " ") * 3, fontsize=10)
+    doc.save(ruta)
+    doc.close()
+
+    servicio, doc_id, registro = _abrir(ruta)
+    destino = tmp_path / "comp.pdf"
+
+    resultado = servicio.comprimir(doc_id, destino)
+
+    assert destino.is_file()
+    assert resultado.bytes_despues < resultado.bytes_antes
+    assert resultado.porcentaje_reduccion > 0
+    registro.cerrar(doc_id)
