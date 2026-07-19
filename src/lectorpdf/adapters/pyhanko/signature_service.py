@@ -17,6 +17,7 @@ from pathlib import Path
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields, signers
 from pyhanko.sign.fields import SigFieldSpec, SigSeedSubFilter
+from pyhanko.sign.timestamps import HTTPTimeStamper
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import (
@@ -55,12 +56,23 @@ class PyHankoSignatureService:
         # soltar el handle de fitz. pyHanko rellena el nombre del firmante y la
         # fecha en la apariencia por defecto del campo.
         spec = self._campo_visible(documento_id, config, nombre_campo)
+        sellador = self._timestamper(config)
 
         # El registro vuelca los cambios pendientes, suelta el handle de fitz,
         # deja que pyHanko firme la ruta y reabre bajo el mismo id (marca FIRMADO).
         self._registro.reescribir_en_disco(
-            documento_id, lambda ruta: self._firmar_fichero(ruta, meta, firmante, spec)
+            documento_id,
+            lambda ruta: self._firmar_fichero(ruta, meta, firmante, spec, sellador),
         )
+
+    def _timestamper(self, config: ConfigFirma) -> HTTPTimeStamper | None:
+        """Sellado de tiempo opcional. Devuelve None si la TSA está deshabilitada
+        (los tests corren así, sin red)."""
+        if not config.usar_tsa:
+            return None
+        if not config.url_tsa:
+            raise ValueError("Se pidió sellado de tiempo pero falta la URL de la TSA")
+        return HTTPTimeStamper(config.url_tsa)
 
     def _campo_visible(
         self, documento_id: str, config: ConfigFirma, nombre_campo: str
@@ -96,6 +108,7 @@ class PyHankoSignatureService:
         meta: signers.PdfSignatureMetadata,
         firmante: signers.SimpleSigner,
         spec: SigFieldSpec | None,
+        sellador: HTTPTimeStamper | None,
     ) -> None:
         descriptor, temporal = tempfile.mkstemp(dir=str(ruta.parent), suffix=".pdf")
         os.close(descriptor)
@@ -106,7 +119,13 @@ class PyHankoSignatureService:
                 if spec is not None:
                     fields.append_signature_field(escritor, spec)
                 with open(temporal_path, "wb") as salida:
-                    signers.sign_pdf(escritor, meta, signer=firmante, output=salida)
+                    signers.sign_pdf(
+                        escritor,
+                        meta,
+                        signer=firmante,
+                        timestamper=sellador,
+                        output=salida,
+                    )
             os.replace(temporal_path, ruta)
         except Exception as exc:
             temporal_path.unlink(missing_ok=True)

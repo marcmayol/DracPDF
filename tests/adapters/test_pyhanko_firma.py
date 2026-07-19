@@ -97,6 +97,25 @@ def test_contrasena_incorrecta_es_credencial_invalida(
     registro.cerrar(doc_id)
 
 
+def test_tsa_deshabilitada_no_crea_sellador() -> None:
+    from pyhanko.sign.timestamps import HTTPTimeStamper
+
+    servicio = PyHankoSignatureService(RegistroDocumentos())
+
+    assert servicio._timestamper(ConfigFirma(pagina=0, usar_tsa=False)) is None
+    sellador = servicio._timestamper(
+        ConfigFirma(pagina=0, usar_tsa=True, url_tsa="http://tsa.ejemplo/tsr")
+    )
+    assert isinstance(sellador, HTTPTimeStamper)  # construido, no se llama (sin red)
+
+
+def test_tsa_habilitada_sin_url_es_error() -> None:
+    servicio = PyHankoSignatureService(RegistroDocumentos())
+
+    with pytest.raises(ValueError):
+        servicio._timestamper(ConfigFirma(pagina=0, usar_tsa=True))
+
+
 def test_abrir_un_pdf_ya_firmado_lo_marca_firmado(
     tmp_path: Path, certificado: tuple[Path, Path, str]
 ) -> None:
