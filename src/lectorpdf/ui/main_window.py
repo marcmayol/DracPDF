@@ -8,11 +8,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QDockWidget, QLabel, QMainWindow, QToolBar
+from PySide6.QtCore import QMimeData, Qt
+from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent
+from PySide6.QtWidgets import (
+    QDockWidget,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QToolBar,
+)
 
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
+from lectorpdf.core.domain.errores import ErrorDominio
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
@@ -38,6 +46,7 @@ class MainWindow(QMainWindow):
         self._construir_barra()
         self._conectar_senales()
 
+        self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
         self.resize(1100, 1000)
 
@@ -55,6 +64,8 @@ class MainWindow(QMainWindow):
         barra = QToolBar("Navegación", self)
         self.addToolBar(barra)
 
+        self._accion(barra, "Abrir…", self._abrir_por_dialogo)
+        barra.addSeparator()
         self._accion(barra, "◀ Anterior", self._visor.pagina_anterior)
         self._accion(barra, "Siguiente ▶", self._visor.pagina_siguiente)
         barra.addSeparator()
@@ -86,7 +97,53 @@ class MainWindow(QMainWindow):
         self._actualizar_etiqueta(0)
         return documento
 
+    def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
+        """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""
+        try:
+            self.abrir_ruta(ruta)
+            return True
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo abrir el documento", str(exc))
+            return False
+
+    def _abrir_por_dialogo(self) -> None:
+        ruta_str, _ = QFileDialog.getOpenFileName(
+            self, "Abrir PDF", "", "Documentos PDF (*.pdf)"
+        )
+        if ruta_str:
+            self.abrir_ruta_con_aviso(Path(ruta_str))
+
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
         self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
+
+    # -- Arrastrar y soltar -------------------------------------------------
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        mime = event.mimeData()
+        if mime is not None and _ruta_pdf_de(mime) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        mime = event.mimeData()
+        ruta = _ruta_pdf_de(mime) if mime is not None else None
+        if ruta is not None:
+            event.acceptProposedAction()
+            self.abrir_ruta_con_aviso(ruta)
+        else:
+            event.ignore()
+
+
+def _ruta_pdf_de(mime: QMimeData) -> Path | None:
+    """Primera ruta local con extensión .pdf entre las URLs arrastradas."""
+    if not mime.hasUrls():
+        return None
+    for url in mime.urls():
+        if url.isLocalFile():
+            ruta = Path(url.toLocalFile())
+            if ruta.suffix.lower() == ".pdf":
+                return ruta
+    return None

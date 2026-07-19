@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Permite abrir un PDF pasándolo como argumento: `lectorpdf documento.pdf`.
     if len(argv) > 1:
-        ventana.abrir_ruta(Path(argv[1]))
+        ventana.abrir_ruta_con_aviso(Path(argv[1]))
 
     return app.exec()
 
