@@ -32,6 +32,10 @@ from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.signature.biblioteca_firmas import (
+    BibliotecaFirmas,
+    directorio_por_defecto,
+)
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
@@ -62,6 +66,7 @@ class MainWindow(QMainWindow):
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._capa_form = FormLayer(self._visor, self._rellenar)
         self._capa_firma = SignatureLayer(self._visor, self._estampar)
+        self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
         self.setCentralWidget(self._visor)
 
         self._construir_dock_miniaturas()
@@ -153,7 +158,7 @@ class MainWindow(QMainWindow):
     def _iniciar_firma(self) -> None:
         if self._documento is None:
             return
-        dialogo = SignatureDialog(self)
+        dialogo = SignatureDialog(self, self._biblioteca)
         if dialogo.exec() != SignatureDialog.DialogCode.Accepted:
             return
         png = dialogo.png()
