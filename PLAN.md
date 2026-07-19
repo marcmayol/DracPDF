@@ -93,6 +93,25 @@ https://claude.ai/design/p/12145c22-8a62-4f15-bcb7-41d3448492c9?file=Identidad+L
 
 **Criterio de aceptación:** la app arranca con tema claro y oscuro conmutables y persistentes, toda la UI usa tokens, `generar_iconos.py` produce el .ico y los PNG desde los SVG con exit 0, y las cuatro pantallas clave se corresponden con las maquetas.
 
+### Fase 6: Herramientas de PDF
+
+Operaciones de manipulación de PDF integradas en un menú "Herramientas" y en el panel de miniaturas. (Reconstruida a partir del criterio de aceptación acordado.)
+
+1. **Unir**: combinar varios PDF en uno nuevo. Opera sobre RUTAS de ficheros cerrados (el usuario elige N ficheros → PDF nuevo). El documento abierto puede prerrellenarse como primer elemento, pero se une desde su fichero en disco. Si un fichero elegido está abierto con cambios sin guardar, avisar y ofrecer guardarlo antes de unir.
+2. **Organizar páginas**: reordenar, rotar y eliminar páginas del documento abierto desde el panel de miniaturas, con invalidación de la caché de render y refresco de miniaturas.
+3. **Dividir**: separar un PDF (por páginas o por rangos) en varios ficheros.
+4. **Proteger**: cifrar con contraseña.
+5. **Desproteger**: quitar la contraseña (reabrir sin cifrado, con igualdad de contenido verificable).
+6. **Comprimir**: reducir el tamaño del fichero, reportando la reducción.
+7. **Exportar**: a PNG (una imagen por página) y a texto.
+
+#### Reglas propias de esta fase
+- Unir opera sobre rutas de ficheros cerrados, no sobre documentos del registro.
+- El core sigue síncrono y sin Qt: los casos de uso son funciones síncronas; la concurrencia vive solo en la UI (QThread/QRunnable que invoca el caso de uso y emite progreso/cancelación). Un caso de uso que reporte progreso recibe un `Callable` simple del dominio, no señales Qt.
+- Las operaciones que mutan el documento abierto se rechazan si está FIRMADO (coherencia con las marcas del registro).
+
+**Criterio de aceptación:** script que une (con el orden comprobado), divide, protege y reabre con contraseña, desprotege (con igualdad verificada), comprime (con la reducción reportada) y exporta a PNG y texto, con exit 0; y demostración de que las operaciones sobre un documento FIRMADO se rechazan.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
