@@ -100,6 +100,35 @@ def test_confirmar_invalida_el_render_de_la_pagina(qapp: object) -> None:
     assert renders_despues == renders_antes + 1  # se re-renderizó la página
 
 
+def test_redimensionar_y_mover_antes_de_confirmar(qapp: object) -> None:
+    from PySide6.QtCore import QPointF
+
+    documento = _documento()
+    visor, capa, servicio, _ = _entorno(documento)
+    visor.set_documento(documento)
+    capa.iniciar_colocacion(documento, _PNG_1x1)
+
+    # El usuario redimensiona y mueve la previsualización antes de confirmar.
+    item = capa._item
+    assert item is not None
+    item.redimensionar_desde_ancho(120.0)
+    ancho, alto = item.tamano()
+    # Colocar la esquina superior izquierda del item en (40, 30) de la página 0.
+    rect_pagina = visor.rect_pagina(0)
+    assert rect_pagina is not None
+    item.setPos(QPointF(rect_pagina.left() + 40.0, rect_pagina.top() + 30.0))
+
+    pagina = capa.confirmar()
+
+    assert pagina == 0
+    _, _, rect_pt, _ = servicio.estampados[0]
+    # A escala 1.0, el rect en puntos coincide con el desplazamiento y tamaño.
+    assert rect_pt.x0 == 40.0
+    assert rect_pt.y0 == 30.0
+    assert rect_pt.x1 == 40.0 + ancho
+    assert rect_pt.y1 == 30.0 + alto
+
+
 def test_confirmar_sin_colocar_no_hace_nada(qapp: object) -> None:
     documento = _documento()
     visor, capa, servicio, _ = _entorno(documento)
