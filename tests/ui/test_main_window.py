@@ -162,6 +162,27 @@ def test_guardar_limpia_los_cambios(qapp: object, tmp_path: Path) -> None:
     assert ventana._guardar_form.hay_cambios_sin_guardar(documento) is False
 
 
+def test_firmar_estampa_y_marca_cambios_sin_guardar(
+    qapp: object, tmp_path: Path
+) -> None:
+    import fitz as _fitz
+
+    ventana = MainWindow()
+    ventana.resize(900, 700)
+    ventana.show()
+    ventana.abrir_ruta(_pdf(tmp_path, paginas=2))
+    documento = ventana._documento
+    assert documento is not None
+
+    png = _fitz.Pixmap(
+        _fitz.csRGB, _fitz.IRect(0, 0, 100, 40), False
+    ).tobytes("png")
+    ventana._capa_firma.iniciar_colocacion(documento, png)
+    ventana._confirmar_firma()
+
+    assert ventana._guardar_form.hay_cambios_sin_guardar(documento) is True
+
+
 def test_cerrar_con_cambios_guarda_si_el_usuario_lo_pide(
     qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

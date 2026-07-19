@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoNoAbierto
-from lectorpdf.core.domain.formularios import CampoFormulario
+from lectorpdf.core.domain.formularios import CampoFormulario, RectanguloPt
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada
 
 
@@ -77,3 +77,19 @@ class FakeFormService:
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         self.guardados.append((documento_id, destino))
         self.sucio = False
+
+
+class FakeEstampadoService:
+    """Fake en memoria de `EstampadoService`. Registra los estampados."""
+
+    def __init__(self) -> None:
+        self.estampados: list[tuple[str, int, RectanguloPt, bytes]] = []
+
+    def estampar_imagen(
+        self,
+        documento_id: str,
+        pagina: int,
+        rect_pt: RectanguloPt,
+        imagen_png: bytes,
+    ) -> None:
+        self.estampados.append((documento_id, pagina, rect_pt, imagen_png))

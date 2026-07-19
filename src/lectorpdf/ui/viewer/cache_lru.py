@@ -26,6 +26,10 @@ class CacheLRU[K, V]:
         while len(self._datos) > self._capacidad:
             self._datos.popitem(last=False)
 
+    def descartar(self, clave: K) -> None:
+        """Elimina una entrada si existe (para invalidar renders concretos)."""
+        self._datos.pop(clave, None)
+
     def limpiar(self) -> None:
         self._datos.clear()
 

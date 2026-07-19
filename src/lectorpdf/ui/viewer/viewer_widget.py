@@ -9,7 +9,7 @@ volver a desplazarse.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -118,6 +118,24 @@ class ViewerWidget(QGraphicsView):
     def rect_pagina(self, indice: int) -> QRectF | None:
         """Rectángulo de la página en coordenadas de escena (o None si no existe)."""
         return self._geometria.get(indice)
+
+    def pagina_en_punto(self, punto: QPointF) -> int | None:
+        """Índice de la página cuyo rectángulo contiene el punto de escena."""
+        for indice, rect in self._geometria.items():
+            if rect.contains(punto):
+                return indice
+        return None
+
+    def invalidar_pagina(self, indice: int) -> None:
+        """Purga el render cacheado de una página (todas las escalas) y la
+        vuelve a renderizar. Se usa tras estampar una firma en ella."""
+        for clave in list(self._cache.claves()):
+            if clave[0] == indice:
+                self._cache.descartar(clave)
+        item = self._pixmaps.pop(indice, None)
+        if item is not None:
+            self._scene.removeItem(item)
+        self._actualizar_paginas_visibles()
 
     # -- Render perezoso ----------------------------------------------------
 

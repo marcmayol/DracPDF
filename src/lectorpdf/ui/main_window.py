@@ -20,16 +20,20 @@ from PySide6.QtWidgets import (
 )
 
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
+from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.signature.signature_dialog import SignatureDialog
+from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
@@ -43,18 +47,21 @@ class MainWindow(QMainWindow):
         self._registro = RegistroDocumentos()
         self._repositorio = PyMuPDFDocumentRepository(self._registro)
         self._servicio_form = PyMuPDFFormService(self._registro)
+        self._servicio_estampado = PyMuPDFEstampadoService(self._registro)
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
         self._listar = ListarCampos(self._servicio_form)
         self._rellenar = RellenarCampo(self._servicio_form)
         self._guardar_form = GuardarFormulario(self._servicio_form)
+        self._estampar = EstamparFirma(self._servicio_estampado)
 
         self._documento: Documento | None = None
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._capa_form = FormLayer(self._visor, self._rellenar)
+        self._capa_firma = SignatureLayer(self._visor, self._estampar)
         self.setCentralWidget(self._visor)
 
         self._construir_dock_miniaturas()
@@ -90,6 +97,10 @@ class MainWindow(QMainWindow):
         self._accion(barra, "+ Acercar", self._visor.zoom_acercar)
         self._accion(barra, "Ajustar ancho", self._visor.ajustar_a_ancho)
         self._accion(barra, "Ajustar página", self._visor.ajustar_a_pagina)
+        barra.addSeparator()
+        self._accion(barra, "Firmar…", self._iniciar_firma)
+        self._accion(barra, "✓ Colocar", self._confirmar_firma)
+        self._accion(barra, "✗ Cancelar firma", self._capa_firma.cancelar)
         barra.addSeparator()
         barra.addWidget(self._etiqueta_pagina)
 
@@ -138,6 +149,22 @@ class MainWindow(QMainWindow):
             self._guardar_form.ejecutar(self._documento)
         except Exception as exc:  # errores de E/S de PyMuPDF al guardar
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
+
+    def _iniciar_firma(self) -> None:
+        if self._documento is None:
+            return
+        dialogo = SignatureDialog(self)
+        if dialogo.exec() != SignatureDialog.DialogCode.Accepted:
+            return
+        png = dialogo.png()
+        if png:
+            self._capa_firma.iniciar_colocacion(self._documento, png)
+
+    def _confirmar_firma(self) -> None:
+        try:
+            self._capa_firma.confirmar()
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo estampar la firma", str(exc))
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

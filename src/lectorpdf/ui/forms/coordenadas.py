@@ -31,3 +31,18 @@ def rect_pdf_a_escena(
         ancho=rect_pt.ancho * escala,
         alto=rect_pt.alto * escala,
     )
+
+
+def rect_escena_a_pdf(
+    rect: RectEscena, origen_x: float, origen_y: float, escala: float
+) -> RectanguloPt:
+    """Inversa de `rect_pdf_a_escena`: de coordenadas de escena a puntos PDF.
+
+    Usada al confirmar la colocación de una firma para saber dónde estamparla.
+    """
+    return RectanguloPt(
+        x0=(rect.x - origen_x) / escala,
+        y0=(rect.y - origen_y) / escala,
+        x1=(rect.x + rect.ancho - origen_x) / escala,
+        y1=(rect.y + rect.alto - origen_y) / escala,
+    )
