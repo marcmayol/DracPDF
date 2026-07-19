@@ -22,6 +22,7 @@ class FakeDocumentRepository:
         )
         self.abrir_llamado_con: Path | None = None
         self.render_llamado_con: tuple[str, int, float] | None = None
+        self.render_llamadas: list[tuple[str, int, float]] = []
         self.cerrado: list[str] = []
 
     def abrir(self, ruta: Path) -> Documento:
@@ -36,6 +37,7 @@ class FakeDocumentRepository:
         if self._documento is not None and documento_id != self._documento.id:
             raise DocumentoNoAbierto(documento_id)
         self.render_llamado_con = (documento_id, indice, escala)
+        self.render_llamadas.append((documento_id, indice, escala))
         return self._imagen
 
     def cerrar(self, documento_id: str) -> None:

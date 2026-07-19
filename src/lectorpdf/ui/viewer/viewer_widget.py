@@ -1,17 +1,16 @@
 """Widget de visor de páginas basado en QGraphicsView.
 
 La escena se compone de un rectángulo de fondo por página (barato, vectorial),
-dimensionado a partir de los metadatos del documento. Sobre cada fondo se coloca
-un QGraphicsPixmapItem con la página renderizada.
-
-En esta fase el render es voraz (todas las páginas). El render perezoso y la
-caché LRU se añaden en la tarea 4.
+dimensionado a partir de los metadatos del documento. Sobre cada fondo se coloca,
+solo cuando la página está visible (± 1), un QGraphicsPixmapItem con la página
+renderizada. Los renders se guardan en una caché LRU para no repetirlos al
+volver a desplazarse.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QPen
+from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -21,12 +20,16 @@ from PySide6.QtWidgets import (
 
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.ui.viewer.cache_lru import CacheLRU
 from lectorpdf.ui.viewer.imagen import qpixmap_desde
 
 MARGEN_PX = 12.0
+_CAPACIDAD_CACHE = 24
 _COLOR_FONDO_VISTA = QColor(82, 86, 89)
 _COLOR_PAGINA = QColor(255, 255, 255)
 _COLOR_BORDE = QColor(0, 0, 0, 40)
+
+_ClaveRender = tuple[int, float]
 
 
 class ViewerWidget(QGraphicsView):
@@ -40,12 +43,12 @@ class ViewerWidget(QGraphicsView):
         self._geometria: dict[int, QRectF] = {}
         self._fondos: dict[int, QGraphicsRectItem] = {}
         self._pixmaps: dict[int, QGraphicsPixmapItem] = {}
+        self._cache: CacheLRU[_ClaveRender, QPixmap] = CacheLRU(_CAPACIDAD_CACHE)
 
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         self.setBackgroundBrush(QBrush(_COLOR_FONDO_VISTA))
         self.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        self.setRenderHints(self.renderHints())
 
     @property
     def documento(self) -> Documento | None:
@@ -55,11 +58,16 @@ class ViewerWidget(QGraphicsView):
     def escala(self) -> float:
         return self._escala
 
+    def indices_mostrados(self) -> set[int]:
+        """Páginas actualmente pintadas en la escena (para tests/diagnóstico)."""
+        return set(self._pixmaps)
+
     def set_documento(self, documento: Documento, escala: float = 1.0) -> None:
         self._documento = documento
         self._escala = escala
+        self._cache.limpiar()
         self._construir_escena()
-        self._refrescar()
+        self._actualizar_paginas_visibles()
 
     # -- Construcción de la escena ------------------------------------------
 
@@ -72,9 +80,10 @@ class ViewerWidget(QGraphicsView):
             self._scene.setSceneRect(QRectF())
             return
 
-        ancho_max = max(
-            (p.ancho_pt for p in self._documento.paginas), default=0.0
-        ) * self._escala
+        ancho_max = (
+            max((p.ancho_pt for p in self._documento.paginas), default=0.0)
+            * self._escala
+        )
 
         y = MARGEN_PX
         for pagina in self._documento.paginas:
@@ -84,29 +93,72 @@ class ViewerWidget(QGraphicsView):
             rect = QRectF(x, y, ancho_px, alto_px)
             self._geometria[pagina.indice] = rect
 
-            fondo = self._scene.addRect(
+            self._fondos[pagina.indice] = self._scene.addRect(
                 rect, QPen(_COLOR_BORDE), QBrush(_COLOR_PAGINA)
             )
-            self._fondos[pagina.indice] = fondo
-
             y += alto_px + MARGEN_PX
 
-        self._scene.setSceneRect(
-            0, 0, ancho_max + 2 * MARGEN_PX, y
-        )
+        self._scene.setSceneRect(0, 0, ancho_max + 2 * MARGEN_PX, y)
 
-    def _refrescar(self) -> None:
-        """Renderiza y muestra todas las páginas (voraz; ver tarea 4)."""
-        for indice in self._geometria:
+    # -- Render perezoso ----------------------------------------------------
+
+    def _rect_visible(self) -> QRectF:
+        return self.mapToScene(self.viewport().rect()).boundingRect()
+
+    def _indices_en_rect(self, rect_visible: QRectF) -> set[int]:
+        """Páginas que intersectan el rectángulo visible, expandidas en ±1."""
+        if not self._geometria:
+            return set()
+        visibles = [
+            i for i, r in self._geometria.items() if r.intersects(rect_visible)
+        ]
+        if not visibles:
+            # Ninguna intersecta (hueco entre páginas): la más cercana en vertical.
+            centro_y = rect_visible.center().y()
+            visibles = [
+                min(
+                    self._geometria,
+                    key=lambda k: abs(self._geometria[k].center().y() - centro_y),
+                )
+            ]
+        lo = min(visibles) - 1
+        hi = max(visibles) + 1
+        ultimo = max(self._geometria)
+        return {i for i in range(lo, hi + 1) if 0 <= i <= ultimo}
+
+    def _actualizar_paginas_visibles(self) -> None:
+        if self._documento is None:
+            return
+        deseados = self._indices_en_rect(self._rect_visible())
+
+        for indice in list(self._pixmaps):
+            if indice not in deseados:
+                self._scene.removeItem(self._pixmaps.pop(indice))
+
+        for indice in sorted(deseados):
             self._mostrar_pagina(indice)
 
     def _mostrar_pagina(self, indice: int) -> None:
         if self._documento is None or indice in self._pixmaps:
             return
-        imagen = self._caso_render.ejecutar(self._documento, indice, self._escala)
-        pixmap = qpixmap_desde(imagen)
+        clave: _ClaveRender = (indice, self._escala)
+        pixmap = self._cache.obtener(clave)
+        if pixmap is None:
+            imagen = self._caso_render.ejecutar(self._documento, indice, self._escala)
+            pixmap = qpixmap_desde(imagen)
+            self._cache.poner(clave, pixmap)
+
         item = self._scene.addPixmap(pixmap)
-        rect = self._geometria[indice]
-        item.setPos(rect.topLeft())
+        item.setPos(self._geometria[indice].topLeft())
         item.setZValue(1.0)
         self._pixmaps[indice] = item
+
+    # -- Eventos que cambian la ventana visible -----------------------------
+
+    def scrollContentsBy(self, dx: int, dy: int) -> None:
+        super().scrollContentsBy(dx, dy)
+        self._actualizar_paginas_visibles()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._actualizar_paginas_visibles()
