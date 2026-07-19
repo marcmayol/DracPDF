@@ -12,10 +12,12 @@ from PySide6.QtCore import QMimeData, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QDockWidget,
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QToolBar,
 )
@@ -24,6 +26,7 @@ from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
+from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
@@ -35,9 +38,11 @@ from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
     directorio_por_defecto,
@@ -47,6 +52,7 @@ from lectorpdf.ui.signature.digital_signature_dialog import DigitalSignatureDial
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
+from lectorpdf.ui.tareas import ResultadoTarea, ejecutar_con_progreso
 from lectorpdf.ui.theme.estilos import (
     aplicar_tema,
     cargar_tema_preferido,
@@ -70,6 +76,7 @@ class MainWindow(QMainWindow):
         self._servicio_form = PyMuPDFFormService(self._registro)
         self._servicio_estampado = PyMuPDFEstampadoService(self._registro)
         self._servicio_firma = PyHankoSignatureService(self._registro)
+        self._servicio_herr = PyMuPDFHerramientas(self._registro)
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -79,6 +86,7 @@ class MainWindow(QMainWindow):
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
+        self._unir = UnirPdf(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -97,6 +105,7 @@ class MainWindow(QMainWindow):
         self._construir_dock_verificacion()
         self._etiqueta_pagina = QLabel("—")
         self._construir_barra()
+        self._construir_menu()
         self._conectar_senales()
 
         self._aplicar_tema_actual()
@@ -160,6 +169,18 @@ class MainWindow(QMainWindow):
         self._accion(barra, "Cambiar tema", self._conmutar_tema)
         self._accion(barra, "Acerca de", self._mostrar_acerca_de)
         barra.addWidget(self._etiqueta_pagina)
+
+    def _construir_menu(self) -> None:
+        menu = self.menuBar().addMenu("Herramientas")
+        self._accion_menu(menu, "Unir PDF…", self._menu_unir)
+
+    def _accion_menu(
+        self, menu: QMenu, texto: str, callback: Callable[[], None]
+    ) -> QAction:
+        accion = QAction(texto, self)
+        accion.triggered.connect(callback)
+        menu.addAction(accion)
+        return accion
 
     def _accion(self, barra: QToolBar, texto: str, callback: Callable[[], None]) -> None:
         accion = QAction(texto, self)
@@ -301,6 +322,59 @@ class MainWindow(QMainWindow):
         anclas = [Path(ruta_ancla)] if ruta_ancla else []
         resultados = self._verificar.ejecutar(self._documento, anclas)
         self._panel_verificacion.mostrar(resultados)
+
+    # -- Herramientas -------------------------------------------------------
+
+    def _menu_unir(self) -> None:
+        ruta_inicial = self._documento.ruta if self._documento is not None else None
+        dialogo = UnirDialog(self, ruta_inicial)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        rutas = dialogo.rutas()
+        if len(rutas) < 2:
+            QMessageBox.information(self, "Unir", "Elige al menos dos ficheros.")
+            return
+        if not self._asegurar_guardado_si_incluido(rutas):
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF unido", "unido.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self, "Uniendo PDF…", lambda p: self._unir.ejecutar(rutas, destino, p)
+        )
+        self._tras_tarea(res, f"PDF unido guardado en:\n{destino}")
+
+    def _asegurar_guardado_si_incluido(self, rutas: list[Path]) -> bool:
+        """Si el documento abierto está en la lista y tiene cambios sin guardar,
+        ofrece guardarlo antes de unir. Devuelve False si el usuario cancela."""
+        doc = self._documento
+        if doc is None or doc.ruta not in rutas:
+            return True
+        if not self._guardar_form.hay_cambios_sin_guardar(doc):
+            return True
+        respuesta = QMessageBox.question(
+            self,
+            "Cambios sin guardar",
+            "El documento abierto está en la lista y tiene cambios sin guardar.\n"
+            "Se unirá desde el fichero en disco. ¿Guardarlo antes?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Cancel,
+        )
+        if respuesta == QMessageBox.StandardButton.Save:
+            self._guardar()
+            return True
+        return False
+
+    def _tras_tarea(self, res: ResultadoTarea, mensaje_ok: str) -> None:
+        if res.cancelado:
+            return
+        if res.error is not None:
+            QMessageBox.warning(self, "No se pudo completar", str(res.error))
+            return
+        QMessageBox.information(self, "Hecho", mensaje_ok)
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

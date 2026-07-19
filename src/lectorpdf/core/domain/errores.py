@@ -49,3 +49,19 @@ class CredencialInvalida(ErrorDominio):
 
 class ErrorDeFirma(ErrorDominio):
     """Fallo al firmar criptográficamente el documento."""
+
+
+class RangoInvalido(ErrorDominio):
+    """Un rango de páginas está fuera de los límites del documento."""
+
+
+class ContrasenaIncorrecta(ErrorDominio):
+    """La contraseña no permite abrir/descifrar el documento."""
+
+
+class SinPaginas(ErrorDominio):
+    """La operación dejaría el documento sin páginas, o no hay entrada."""
+
+
+class OperacionCancelada(ErrorDominio):
+    """El usuario canceló una operación larga."""

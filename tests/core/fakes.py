@@ -12,7 +12,8 @@ from lectorpdf.core.domain.firma_digital import (
     ResultadoVerificacion,
 )
 from lectorpdf.core.domain.formularios import CampoFormulario, RectanguloPt
-from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada
+from lectorpdf.core.domain.herramientas import Progreso, Rango, ResultadoCompresion
+from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 
 
 class FakeDocumentRepository:
@@ -124,3 +125,84 @@ class FakeSignatureService:
     ) -> tuple[ResultadoVerificacion, ...]:
         self.verificaciones.append(documento_id)
         return self._resultados
+
+
+class FakeServicioHerramientas:
+    """Fake en memoria de `ServicioHerramientas`. Registra las llamadas."""
+
+    def __init__(self) -> None:
+        self.uniones: list[tuple[list[Path], Path]] = []
+        self.desprotecciones: list[tuple[Path, str, Path]] = []
+        self.rotaciones: list[tuple[str, int, int]] = []
+        self.eliminaciones: list[tuple[str, int]] = []
+        self.movimientos: list[tuple[str, int, int]] = []
+        self.divisiones: list[tuple[str, list[Rango], Path]] = []
+        self.protecciones: list[tuple[str, Path, str]] = []
+        self.compresiones: list[tuple[str, Path]] = []
+        self.exportaciones_png: list[tuple[str, Path, int]] = []
+        self.exportaciones_texto: list[tuple[str, Path]] = []
+        # Valores devueltos configurables.
+        self.paginas_resultado: tuple[Pagina, ...] = ()
+        self.rutas_division: list[Path] = []
+        self.rutas_png: list[Path] = []
+        self.resultado_compresion = ResultadoCompresion(bytes_antes=100, bytes_despues=40)
+
+    def unir(
+        self, rutas: Sequence[Path], destino: Path, progreso: Progreso | None = None
+    ) -> None:
+        if progreso is not None:
+            progreso(len(rutas), len(rutas))
+        self.uniones.append((list(rutas), destino))
+
+    def desproteger(self, ruta: Path, contrasena: str, destino: Path) -> None:
+        self.desprotecciones.append((ruta, contrasena, destino))
+
+    def rotar_pagina(
+        self, documento_id: str, indice: int, grados: int
+    ) -> tuple[Pagina, ...]:
+        self.rotaciones.append((documento_id, indice, grados))
+        return self.paginas_resultado
+
+    def eliminar_pagina(
+        self, documento_id: str, indice: int
+    ) -> tuple[Pagina, ...]:
+        self.eliminaciones.append((documento_id, indice))
+        return self.paginas_resultado
+
+    def mover_pagina(
+        self, documento_id: str, origen: int, destino: int
+    ) -> tuple[Pagina, ...]:
+        self.movimientos.append((documento_id, origen, destino))
+        return self.paginas_resultado
+
+    def dividir(
+        self, documento_id: str, rangos: Sequence[Rango], directorio: Path
+    ) -> list[Path]:
+        self.divisiones.append((documento_id, list(rangos), directorio))
+        return self.rutas_division
+
+    def proteger(self, documento_id: str, destino: Path, contrasena: str) -> None:
+        self.protecciones.append((documento_id, destino, contrasena))
+
+    def comprimir(
+        self, documento_id: str, destino: Path, progreso: Progreso | None = None
+    ) -> ResultadoCompresion:
+        if progreso is not None:
+            progreso(1, 1)
+        self.compresiones.append((documento_id, destino))
+        return self.resultado_compresion
+
+    def exportar_png(
+        self,
+        documento_id: str,
+        directorio: Path,
+        dpi: int,
+        progreso: Progreso | None = None,
+    ) -> list[Path]:
+        if progreso is not None:
+            progreso(1, 1)
+        self.exportaciones_png.append((documento_id, directorio, dpi))
+        return self.rutas_png
+
+    def exportar_texto(self, documento_id: str, destino: Path) -> None:
+        self.exportaciones_texto.append((documento_id, destino))
