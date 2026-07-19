@@ -73,6 +73,26 @@ tests/
 
 **Criterio de aceptación:** el PDF firmado valida en verde en Adobe Reader (certificado de prueba autofirmado añadido a confianza) y la verificación detecta manipulación posterior.
 
+### Fase 5: Identidad visual (diseño "Ladón")
+
+Fuente de verdad del diseño: proyecto de Claude Design "Identidad Ladón.dc.html".
+Importar vía MCP de claude_design (https://api.anthropic.com/v1/design/mcp, auth con /design-login):
+https://claude.ai/design/p/12145c22-8a62-4f15-bcb7-41d3448492c9?file=Identidad+Lad%C3%B3n.dc.html
+
+1. Importar el diseño con el MCP y extraer los tokens (colores, tipografía, espaciados, radios, estados de firma) a `src/ui/theme/tokens.py`: un dataclass por tema (claro/oscuro), sin valores sueltos por el código
+2. Generar el QSS desde los tokens (plantilla + render en arranque o script de build), con conmutador de tema claro/oscuro en la UI y persistencia de la elección en la configuración
+3. Assets del logo: guardar los SVG del diseño en `assets/` (los SVG sí se versionan, son texto); script `scripts/generar_iconos.py` que genera desde ellos el .ico multiresolución (16/32/48/256) y los PNG para Linux; los binarios generados NO se versionan
+4. Iconografía de toolbar: SVG monocromos recoloreados por tema (abrir, guardar, zoom, navegación, dibujar firma, firmar con certificado, verificar), reemplazando los iconos actuales
+5. Aplicar la identidad: icono de ventana y ejecutable, título de la app, pantalla "acerca de" con el logo; renombrado del binario a "ladon" SOLO si lo confirmo cuando llegue la tarea
+6. Revisión pantalla a pantalla contra las maquetas del diseño: vista principal, modo formulario, diálogo de firma dibujada y panel de verificación con sus tres estados; ajustar QSS hasta la correspondencia razonable
+
+#### Reglas propias de esta fase
+- Ningún color/medida hardcodeado fuera de tokens.py
+- El QSS no debe romper el overlay de formularios ni el canvas de firma (test de humo de cada pantalla tras aplicar tema)
+- Los estados de firma usan los tokens semánticos del diseño (no verde/rojo/ámbar puros)
+
+**Criterio de aceptación:** la app arranca con tema claro y oscuro conmutables y persistentes, toda la UI usa tokens, `generar_iconos.py` produce el .ico y los PNG desde los SVG con exit 0, y las cuatro pantallas clave se corresponden con las maquetas.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
