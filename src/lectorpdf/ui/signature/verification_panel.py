@@ -1,16 +1,20 @@
-"""Panel que muestra el estado de las firmas digitales del documento."""
+"""Panel que muestra el estado de las firmas digitales del documento.
+
+Cada firma es una tarjeta (QFrame[sigCard]) con la propiedad dinámica sigState;
+el color del borde y del estado los pone el QSS desde los tokens semánticos del
+diseño (sig-valid/invalid/unknown). Aquí no hay ningún color literal.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QListWidget, QListWidgetItem
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from lectorpdf.core.domain.firma_digital import EstadoFirma, ResultadoVerificacion
 
-_COLORES: dict[EstadoFirma, QColor] = {
-    EstadoFirma.VALIDA: QColor(21, 128, 61),  # verde
-    EstadoFirma.INVALIDA: QColor(185, 28, 28),  # rojo
-    EstadoFirma.DESCONOCIDA: QColor(180, 83, 9),  # ámbar
+_PROP_ESTADO: dict[EstadoFirma, str] = {
+    EstadoFirma.VALIDA: "valid",
+    EstadoFirma.INVALIDA: "invalid",
+    EstadoFirma.DESCONOCIDA: "unknown",
 }
 _ETIQUETAS: dict[EstadoFirma, str] = {
     EstadoFirma.VALIDA: "VÁLIDA",
@@ -19,20 +23,55 @@ _ETIQUETAS: dict[EstadoFirma, str] = {
 }
 
 
-class VerificationPanel(QListWidget):
-    def mostrar(self, resultados: tuple[ResultadoVerificacion, ...]) -> None:
-        self.clear()
-        if not resultados:
-            self.addItem(QListWidgetItem("El documento no tiene firmas digitales."))
-            return
-        for r in resultados:
-            texto = (
-                f"[{_ETIQUETAS[r.estado]}] {r.firmante}\n{r.motivo}"
-                + ("\nCon sello de tiempo" if r.sellada_en_tiempo else "")
-            )
-            item = QListWidgetItem(texto)
-            item.setForeground(_COLORES[r.estado])
-            self.addItem(item)
+class VerificationPanel(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(8, 8, 8, 8)
+        self._layout.setSpacing(8)
+        self._layout.addStretch(1)
 
-    def filas(self) -> int:
-        return self.count()
+    def mostrar(self, resultados: tuple[ResultadoVerificacion, ...]) -> None:
+        self._vaciar()
+        if not resultados:
+            self._layout.insertWidget(0, QLabel("El documento no tiene firmas digitales."))
+            return
+        for indice, resultado in enumerate(resultados):
+            self._layout.insertWidget(indice, _tarjeta(resultado))
+
+    def tarjetas(self) -> int:
+        total = 0
+        for i in range(self._layout.count()):
+            item = self._layout.itemAt(i)
+            widget = item.widget() if item is not None else None
+            if widget is not None and widget.property("sigCard") is True:
+                total += 1
+        return total
+
+    def _vaciar(self) -> None:
+        while self._layout.count() > 1:  # deja el stretch final
+            item = self._layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+
+
+def _tarjeta(resultado: ResultadoVerificacion) -> QFrame:
+    prop = _PROP_ESTADO[resultado.estado]
+    tarjeta = QFrame()
+    tarjeta.setProperty("sigCard", True)
+    tarjeta.setProperty("sigState", prop)
+
+    layout = QVBoxLayout(tarjeta)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(4)
+
+    estado = QLabel(f"{_ETIQUETAS[resultado.estado]} · {resultado.firmante}")
+    estado.setProperty("sigState", prop)
+    motivo = QLabel(resultado.motivo)
+    motivo.setWordWrap(True)
+    layout.addWidget(estado)
+    layout.addWidget(motivo)
+    if resultado.sellada_en_tiempo:
+        layout.addWidget(QLabel("Con sello de tiempo"))
+    return tarjeta
