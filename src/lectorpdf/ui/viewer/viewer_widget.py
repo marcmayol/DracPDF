@@ -9,8 +9,8 @@ volver a desplazarse.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -29,11 +29,18 @@ _COLOR_FONDO_VISTA = QColor(82, 86, 89)
 _COLOR_PAGINA = QColor(255, 255, 255)
 _COLOR_BORDE = QColor(0, 0, 0, 40)
 
+ESCALA_MIN = 0.1
+ESCALA_MAX = 8.0
+FACTOR_ZOOM = 1.25
+
 _ClaveRender = tuple[int, float]
 
 
 class ViewerWidget(QGraphicsView):
     """Muestra las páginas de un documento apiladas verticalmente."""
+
+    #: Se emite con el índice (0-based) cuando cambia la página en foco.
+    pagina_cambiada = Signal(int)
 
     def __init__(self, caso_render: RenderizarPagina) -> None:
         super().__init__()
@@ -44,6 +51,7 @@ class ViewerWidget(QGraphicsView):
         self._fondos: dict[int, QGraphicsRectItem] = {}
         self._pixmaps: dict[int, QGraphicsPixmapItem] = {}
         self._cache: CacheLRU[_ClaveRender, QPixmap] = CacheLRU(_CAPACIDAD_CACHE)
+        self._pagina_emitida = -1
 
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
@@ -64,7 +72,8 @@ class ViewerWidget(QGraphicsView):
 
     def set_documento(self, documento: Documento, escala: float = 1.0) -> None:
         self._documento = documento
-        self._escala = escala
+        self._escala = _acotar_escala(escala)
+        self._pagina_emitida = -1
         self._cache.limpiar()
         self._construir_escena()
         self._actualizar_paginas_visibles()
@@ -106,7 +115,7 @@ class ViewerWidget(QGraphicsView):
         return self.mapToScene(self.viewport().rect()).boundingRect()
 
     def _indices_en_rect(self, rect_visible: QRectF) -> set[int]:
-        """Páginas que intersectan el rectángulo visible, expandidas en ±1."""
+        """Páginas que intersectan el rectángulo visible, expandidas en ± 1."""
         if not self._geometria:
             return set()
         visibles = [
@@ -138,6 +147,8 @@ class ViewerWidget(QGraphicsView):
         for indice in sorted(deseados):
             self._mostrar_pagina(indice)
 
+        self._emitir_pagina_actual()
+
     def _mostrar_pagina(self, indice: int) -> None:
         if self._documento is None or indice in self._pixmaps:
             return
@@ -153,7 +164,91 @@ class ViewerWidget(QGraphicsView):
         item.setZValue(1.0)
         self._pixmaps[indice] = item
 
-    # -- Eventos que cambian la ventana visible -----------------------------
+    # -- Navegación ---------------------------------------------------------
+
+    def pagina_actual(self) -> int:
+        """Índice de la página cuyo centro está más cerca del centro de la vista."""
+        if not self._geometria:
+            return 0
+        centro_y = self._rect_visible().center().y()
+        return min(
+            self._geometria,
+            key=lambda k: abs(self._geometria[k].center().y() - centro_y),
+        )
+
+    def ir_a_pagina(self, indice: int) -> None:
+        if not self._geometria:
+            return
+        indice = max(0, min(indice, max(self._geometria)))
+        self.centerOn(self._geometria[indice].center())
+        self._actualizar_paginas_visibles()
+
+    def pagina_siguiente(self) -> None:
+        self.ir_a_pagina(self.pagina_actual() + 1)
+
+    def pagina_anterior(self) -> None:
+        self.ir_a_pagina(self.pagina_actual() - 1)
+
+    def _emitir_pagina_actual(self) -> None:
+        actual = self.pagina_actual()
+        if actual != self._pagina_emitida:
+            self._pagina_emitida = actual
+            self.pagina_cambiada.emit(actual)
+
+    # -- Zoom ---------------------------------------------------------------
+
+    def set_escala(self, escala: float) -> None:
+        escala = _acotar_escala(escala)
+        if self._documento is None or escala == self._escala:
+            self._escala = escala
+            return
+        actual = self.pagina_actual()
+        self._escala = escala
+        self._cache.limpiar()
+        self._construir_escena()
+        self.ir_a_pagina(actual)
+
+    def zoom_acercar(self) -> None:
+        self.set_escala(self._escala * FACTOR_ZOOM)
+
+    def zoom_alejar(self) -> None:
+        self.set_escala(self._escala / FACTOR_ZOOM)
+
+    def escala_para_ancho(self) -> float:
+        """Escala que hace caber el ancho de la página más ancha en la vista."""
+        if self._documento is None:
+            return self._escala
+        ancho_max_pt = max(p.ancho_pt for p in self._documento.paginas)
+        disponible = self.viewport().width() - 2 * MARGEN_PX
+        return _acotar_escala(disponible / ancho_max_pt)
+
+    def escala_para_pagina(self) -> float:
+        """Escala que hace caber la página actual entera (ancho y alto)."""
+        if self._documento is None:
+            return self._escala
+        pagina = self._documento.paginas[self.pagina_actual()]
+        escala_ancho = (self.viewport().width() - 2 * MARGEN_PX) / pagina.ancho_pt
+        escala_alto = (self.viewport().height() - 2 * MARGEN_PX) / pagina.alto_pt
+        return _acotar_escala(min(escala_ancho, escala_alto))
+
+    def ajustar_a_ancho(self) -> None:
+        self.set_escala(self.escala_para_ancho())
+
+    def ajustar_a_pagina(self) -> None:
+        self.set_escala(self.escala_para_pagina())
+
+    # -- Eventos ------------------------------------------------------------
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.zoom_acercar()
+            elif delta < 0:
+                self.zoom_alejar()
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
     def scrollContentsBy(self, dx: int, dy: int) -> None:
         super().scrollContentsBy(dx, dy)
@@ -162,3 +257,7 @@ class ViewerWidget(QGraphicsView):
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._actualizar_paginas_visibles()
+
+
+def _acotar_escala(escala: float) -> float:
+    return max(ESCALA_MIN, min(ESCALA_MAX, escala))

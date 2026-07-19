@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QRectF
 
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
-from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget
+from lectorpdf.ui.viewer.viewer_widget import (
+    ESCALA_MAX,
+    ESCALA_MIN,
+    FACTOR_ZOOM,
+    MARGEN_PX,
+    ViewerWidget,
+)
 from tests.core.fakes import FakeDocumentRepository
 
 
@@ -136,3 +143,94 @@ def test_volver_a_mostrar_una_pagina_usa_la_cache(qapp: object) -> None:
     visor._mostrar_pagina(0)
 
     assert _renders_de_pagina(repo, 0) == 1
+
+
+# -- Zoom -------------------------------------------------------------------
+
+
+def test_zoom_acercar_y_alejar_ajustan_la_escala(qapp: object) -> None:
+    documento = _documento(num_paginas=3)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.set_documento(documento, escala=1.0)
+
+    visor.zoom_acercar()
+    assert visor.escala == pytest.approx(FACTOR_ZOOM)
+
+    visor.zoom_alejar()
+    assert visor.escala == pytest.approx(1.0)
+
+
+def test_escala_se_acota_a_los_limites(qapp: object) -> None:
+    documento = _documento(num_paginas=1)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.set_documento(documento)
+
+    visor.set_escala(1000.0)
+    assert visor.escala == ESCALA_MAX
+
+    visor.set_escala(0.0001)
+    assert visor.escala == ESCALA_MIN
+
+
+def test_zoom_reconstruye_geometria_con_el_nuevo_tamano(qapp: object) -> None:
+    documento = _documento(num_paginas=2)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.set_documento(documento, escala=1.0)
+
+    visor.set_escala(2.0)
+
+    assert visor._geometria[0].width() == 200.0  # 100 pt * 2.0
+
+
+def test_ajustar_a_ancho_llena_el_viewport(qapp: object) -> None:
+    documento = _documento(num_paginas=3)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.set_documento(documento)
+    visor.resize(500, 400)
+
+    escala = visor.escala_para_ancho()
+
+    disponible = visor.viewport().width() - 2 * MARGEN_PX
+    assert escala == pytest.approx(disponible / 100.0)
+
+
+# -- Navegación -------------------------------------------------------------
+
+
+def test_ir_a_pagina_pone_esa_pagina_en_foco(qapp: object) -> None:
+    documento = _documento(num_paginas=30)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.resize(300, 400)
+    visor.set_documento(documento)
+
+    visor.ir_a_pagina(15)
+
+    assert visor.pagina_actual() == 15
+
+
+def test_pagina_siguiente_y_anterior(qapp: object) -> None:
+    documento = _documento(num_paginas=30)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.resize(300, 400)
+    visor.set_documento(documento)
+
+    visor.ir_a_pagina(10)
+    visor.pagina_siguiente()
+    assert visor.pagina_actual() == 11
+
+    visor.pagina_anterior()
+    assert visor.pagina_actual() == 10
+
+
+def test_emite_pagina_cambiada_al_navegar(qapp: object) -> None:
+    documento = _documento(num_paginas=30)
+    visor = ViewerWidget(RenderizarPagina(_repo(documento)))
+    visor.resize(300, 400)
+    visor.set_documento(documento)
+
+    emitidas: list[int] = []
+    visor.pagina_cambiada.connect(emitidas.append)
+
+    visor.ir_a_pagina(20)
+
+    assert emitidas[-1] == 20
