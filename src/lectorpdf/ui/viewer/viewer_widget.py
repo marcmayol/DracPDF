@@ -41,6 +41,11 @@ class ViewerWidget(QGraphicsView):
 
     #: Se emite con el índice (0-based) cuando cambia la página en foco.
     pagina_cambiada = Signal(int)
+    #: Se emite tras reconstruir la escena (que se vació): las capas superpuestas
+    #: deben descartar sus items previos, ya destruidos por el clear.
+    escena_reconstruida = Signal()
+    #: Se emite tras cada refresco de páginas visibles (scroll/zoom/apertura).
+    vista_actualizada = Signal()
 
     def __init__(self, caso_render: RenderizarPagina) -> None:
         super().__init__()
@@ -108,6 +113,11 @@ class ViewerWidget(QGraphicsView):
             y += alto_px + MARGEN_PX
 
         self._scene.setSceneRect(0, 0, ancho_max + 2 * MARGEN_PX, y)
+        self.escena_reconstruida.emit()
+
+    def rect_pagina(self, indice: int) -> QRectF | None:
+        """Rectángulo de la página en coordenadas de escena (o None si no existe)."""
+        return self._geometria.get(indice)
 
     # -- Render perezoso ----------------------------------------------------
 
@@ -148,6 +158,7 @@ class ViewerWidget(QGraphicsView):
             self._mostrar_pagina(indice)
 
         self._emitir_pagina_actual()
+        self.vista_actualizada.emit()
 
     def _mostrar_pagina(self, indice: int) -> None:
         if self._documento is None or indice in self._pixmaps:
