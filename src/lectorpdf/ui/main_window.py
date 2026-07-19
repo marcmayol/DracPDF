@@ -39,6 +39,8 @@ from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
+from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, ExportarImagenes
+from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
@@ -101,6 +103,8 @@ class MainWindow(QMainWindow):
         self._proteger = ProtegerPdf(self._servicio_herr)
         self._desproteger = DesprotegerPdf(self._servicio_herr)
         self._comprimir = ComprimirPdf(self._servicio_herr)
+        self._exportar_png = ExportarImagenes(self._servicio_herr)
+        self._exportar_texto = ExportarTexto(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -193,6 +197,9 @@ class MainWindow(QMainWindow):
         self._accion_menu(menu, "Quitar contraseña…", self._menu_desproteger)
         menu.addSeparator()
         self._accion_menu(menu, "Comprimir…", self._menu_comprimir)
+        menu.addSeparator()
+        self._accion_menu(menu, "Exportar a PNG…", self._menu_exportar_png)
+        self._accion_menu(menu, "Exportar a texto…", self._menu_exportar_texto)
 
     def _accion_menu(
         self, menu: QMenu, texto: str, callback: Callable[[], None]
@@ -541,6 +548,47 @@ class MainWindow(QMainWindow):
                 f"Comprimido: {r.bytes_antes} → {r.bytes_despues} bytes "
                 f"({r.porcentaje_reduccion:.1f}% menos)\n{destino}",
             )
+
+    def _menu_exportar_png(self) -> None:
+        doc = self._documento_o_aviso("Exportar a PNG")
+        if doc is None:
+            return
+        dpi, ok = QInputDialog.getInt(
+            self, "Exportar a PNG", "Resolución (DPI):", DPI_POR_DEFECTO, 30, 600
+        )
+        if not ok:
+            return
+        directorio = QFileDialog.getExistingDirectory(self, "Carpeta para las imágenes")
+        if not directorio:
+            return
+        salida = Path(directorio)
+        res = ejecutar_con_progreso(
+            self,
+            "Exportando a PNG…",
+            lambda p: self._exportar_png.ejecutar(doc, salida, dpi, p),
+        )
+        if res.cancelado or res.error is not None:
+            self._tras_tarea(res, "")
+            return
+        rutas = res.resultado if isinstance(res.resultado, list) else []
+        QMessageBox.information(
+            self, "Hecho", f"Exportadas {len(rutas)} imágenes en:\n{salida}"
+        )
+
+    def _menu_exportar_texto(self) -> None:
+        doc = self._documento_o_aviso("Exportar a texto")
+        if doc is None:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar texto", "texto.txt", "Texto (*.txt)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self, "Exportando texto…", lambda p: self._exportar_texto.ejecutar(doc, destino)
+        )
+        self._tras_tarea(res, f"Texto exportado a:\n{destino}")
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

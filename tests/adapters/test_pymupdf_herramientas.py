@@ -197,3 +197,28 @@ def test_comprimir_reduce_el_tamano(tmp_path: Path) -> None:
     assert resultado.bytes_despues < resultado.bytes_antes
     assert resultado.porcentaje_reduccion > 0
     registro.cerrar(doc_id)
+
+
+# -- Exportar ---------------------------------------------------------------
+
+
+def test_exportar_png_una_por_pagina(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B", "C"]))
+    salida = tmp_path / "imgs"
+
+    rutas = servicio.exportar_png(doc_id, salida, dpi=100)
+
+    assert len(rutas) == 3
+    assert all(r.suffix == ".png" and r.is_file() for r in rutas)
+    registro.cerrar(doc_id)
+
+
+def test_exportar_texto(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["HOLA", "MUNDO"]))
+    destino = tmp_path / "t.txt"
+
+    servicio.exportar_texto(doc_id, destino)
+
+    contenido = destino.read_text(encoding="utf-8")
+    assert "HOLA" in contenido and "MUNDO" in contenido
+    registro.cerrar(doc_id)
