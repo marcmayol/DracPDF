@@ -37,3 +37,15 @@ class CampoSoloLectura(ErrorDominio):
 
 class ValorDeCampoInvalido(ErrorDominio):
     """El valor no es válido para el tipo de campo (p. ej. no está entre las opciones)."""
+
+
+class DocumentoFirmado(ErrorDominio):
+    """Se intenta editar un documento ya firmado (edición bloqueada)."""
+
+
+class CredencialInvalida(ErrorDominio):
+    """La credencial de firma no es válida (p. ej. el .p12 no existe)."""
+
+
+class ErrorDeFirma(ErrorDominio):
+    """Fallo al firmar criptográficamente el documento."""

@@ -72,14 +72,7 @@ class PyMuPDFFormService:
         return self._registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
-        doc = self._registro.obtener(documento_id)
-        if destino is None:
-            doc.save(
-                doc.name, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP
-            )
-        else:
-            doc.save(str(destino))
-        self._registro.desmarcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+        self._registro.guardar_incremental(documento_id, destino)
 
 
 def _partir_id(campo_id: str) -> tuple[int, int]:

@@ -20,3 +20,5 @@ tests/adapters/fixtures/*.pdf
 .vscode/
 .DS_Store
 Thumbs.db
+*.p12
+*.pfx

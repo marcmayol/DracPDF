@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import fitz
 import pytest
 
@@ -67,6 +69,27 @@ def test_cerrar_limpia_las_marcas() -> None:
 
     # Sin marcas huérfanas: un id nuevo (aunque coincidiera) no arrastra estado.
     assert registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR) is False
+
+
+def test_guardar_incremental_y_recargar_conservan_el_id(tmp_path: Path) -> None:
+    ruta = tmp_path / "doc.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(ruta)
+    doc.close()
+
+    registro = RegistroDocumentos()
+    documento_id = registro.registrar(fitz.open(ruta))
+
+    assert registro.ruta(documento_id) == ruta
+    registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+    registro.guardar_incremental(documento_id, None)
+    assert registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR) is False
+
+    registro.recargar(documento_id)  # mismo id sigue válido
+    assert documento_id in registro
+    assert registro.obtener(documento_id).page_count == 1
+    registro.cerrar(documento_id)
 
 
 def test_dos_adaptadores_comparten_el_mismo_documento() -> None:
