@@ -5,9 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import fitz
+import pytest
 
+from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
-from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
+from lectorpdf.core.domain.errores import DocumentoFirmado, SinPaginas
 
 
 def _pdf(ruta: Path, textos: list[str]) -> Path:
@@ -22,6 +25,12 @@ def _pdf(ruta: Path, textos: list[str]) -> Path:
 
 def _servicio() -> PyMuPDFHerramientas:
     return PyMuPDFHerramientas(RegistroDocumentos())
+
+
+def _abrir(ruta: Path) -> tuple[PyMuPDFHerramientas, str, RegistroDocumentos]:
+    registro = RegistroDocumentos()
+    documento = PyMuPDFDocumentRepository(registro).abrir(ruta)
+    return PyMuPDFHerramientas(registro), documento.id, registro
 
 
 def test_unir_respeta_el_orden(tmp_path: Path) -> None:
@@ -49,3 +58,56 @@ def test_unir_reporta_progreso(tmp_path: Path) -> None:
     _servicio().unir(rutas, tmp_path / "u.pdf", lambda h, t: progresos.append((h, t)))
 
     assert progresos[-1] == (3, 3)
+
+
+# -- Organizar páginas ------------------------------------------------------
+
+
+def test_eliminar_pagina_reduce_y_marca_cambios(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B", "C"]))
+
+    paginas = servicio.eliminar_pagina(doc_id, 1)
+
+    assert len(paginas) == 2
+    assert registro.tiene(doc_id, Marca.CAMBIOS_SIN_GUARDAR)
+    registro.cerrar(doc_id)
+
+
+def test_mover_pagina_reordena(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B", "C"]))
+
+    servicio.mover_pagina(doc_id, 0, 2)  # A pasa al final
+
+    doc = registro.obtener(doc_id)
+    assert doc[2].get_text().strip() == "A"
+    registro.cerrar(doc_id)
+
+
+def test_rotar_pagina(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A"]))
+
+    servicio.rotar_pagina(doc_id, 0, 90)
+
+    assert registro.obtener(doc_id)[0].rotation == 90
+    registro.cerrar(doc_id)
+
+
+def test_organizar_documento_firmado_se_rechaza(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B"]))
+    registro.marcar(doc_id, Marca.FIRMADO)
+
+    with pytest.raises(DocumentoFirmado):
+        servicio.rotar_pagina(doc_id, 0, 90)
+    with pytest.raises(DocumentoFirmado):
+        servicio.eliminar_pagina(doc_id, 0)
+    with pytest.raises(DocumentoFirmado):
+        servicio.mover_pagina(doc_id, 0, 1)
+    registro.cerrar(doc_id)
+
+
+def test_no_se_puede_eliminar_la_ultima_pagina(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["única"]))
+
+    with pytest.raises(SinPaginas):
+        servicio.eliminar_pagina(doc_id, 0)
+    registro.cerrar(doc_id)

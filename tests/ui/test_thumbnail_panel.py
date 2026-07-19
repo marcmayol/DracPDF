@@ -74,3 +74,43 @@ def test_seleccion_del_usuario_emite_la_senal(qapp: object) -> None:
     panel.setCurrentRow(3)  # simula clic del usuario
 
     assert emitidas == [3]
+
+
+def _accion(menu, texto):  # type: ignore[no-untyped-def]
+    return next(a for a in menu.actions() if a.text() == texto)
+
+
+def test_menu_organizacion_emite_rotar_y_eliminar(qapp: object) -> None:
+    documento = _documento(5)
+    panel, _ = _panel(documento)
+    panel.set_documento(documento)
+
+    rotaciones: list[tuple[int, int]] = []
+    eliminaciones: list[int] = []
+    panel.rotar_solicitado.connect(lambda i, g: rotaciones.append((i, g)))
+    panel.eliminar_solicitado.connect(eliminaciones.append)
+
+    menu = panel.menu_organizacion(2)
+    _accion(menu, "Rotar a la derecha").trigger()
+    _accion(menu, "Eliminar página").trigger()
+
+    assert rotaciones == [(2, 90)]
+    assert eliminaciones == [2]
+
+
+def test_menu_organizacion_mover_segun_posicion(qapp: object) -> None:
+    documento = _documento(3)
+    panel, _ = _panel(documento)
+    panel.set_documento(documento)
+
+    movimientos: list[tuple[int, int]] = []
+    panel.mover_solicitado.connect(lambda o, d: movimientos.append((o, d)))
+
+    # La primera página no tiene "Subir"; la del medio tiene ambas.
+    textos_primera = [a.text() for a in panel.menu_organizacion(0).actions()]
+    assert "Subir" not in textos_primera
+
+    _accion(panel.menu_organizacion(1), "Subir").trigger()
+    _accion(panel.menu_organizacion(1), "Bajar").trigger()
+
+    assert movimientos == [(1, 0), (1, 2)]

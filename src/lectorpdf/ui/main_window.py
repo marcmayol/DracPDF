@@ -36,6 +36,7 @@ from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.core.use_cases.unir_pdf import UnirPdf
@@ -87,6 +88,7 @@ class MainWindow(QMainWindow):
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
         self._unir = UnirPdf(self._servicio_herr)
+        self._organizar = OrganizarPaginas(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -204,6 +206,9 @@ class MainWindow(QMainWindow):
         self._visor.pagina_cambiada.connect(self._miniaturas.seleccionar_pagina)
         self._visor.pagina_cambiada.connect(self._actualizar_etiqueta)
         self._miniaturas.pagina_seleccionada.connect(self._visor.ir_a_pagina)
+        self._miniaturas.rotar_solicitado.connect(self._rotar_pagina)
+        self._miniaturas.eliminar_solicitado.connect(self._eliminar_pagina)
+        self._miniaturas.mover_solicitado.connect(self._mover_pagina)
 
     # -- Acciones -----------------------------------------------------------
 
@@ -322,6 +327,34 @@ class MainWindow(QMainWindow):
         anclas = [Path(ruta_ancla)] if ruta_ancla else []
         resultados = self._verificar.ejecutar(self._documento, anclas)
         self._panel_verificacion.mostrar(resultados)
+
+    # -- Organizar páginas (desde el panel de miniaturas) -------------------
+
+    def _rotar_pagina(self, indice: int, grados: int) -> None:
+        self._aplicar_organizacion(lambda d: self._organizar.rotar(d, indice, grados))
+
+    def _eliminar_pagina(self, indice: int) -> None:
+        self._aplicar_organizacion(lambda d: self._organizar.eliminar(d, indice))
+
+    def _mover_pagina(self, origen: int, destino: int) -> None:
+        self._aplicar_organizacion(lambda d: self._organizar.mover(d, origen, destino))
+
+    def _aplicar_organizacion(
+        self, operacion: Callable[[Documento], Documento]
+    ) -> None:
+        if self._documento is None:
+            return
+        try:
+            nuevo = operacion(self._documento)
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo organizar", str(exc))
+            return
+        self._documento = nuevo
+        # La reorganización cambió las páginas: refrescar visor (con el zoom
+        # actual, que invalida la caché de render), miniaturas y formulario.
+        self._visor.set_documento(nuevo, self._visor.escala)
+        self._miniaturas.set_documento(nuevo)
+        self._cargar_formulario(nuevo)
 
     # -- Herramientas -------------------------------------------------------
 

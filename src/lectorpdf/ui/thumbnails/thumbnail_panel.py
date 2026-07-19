@@ -6,9 +6,9 @@ panel, para no renderizar cientos de páginas al abrir el documento.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QListWidget, QListWidgetItem
+from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMenu
 
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
@@ -19,9 +19,13 @@ _ROL_INDICE = int(Qt.ItemDataRole.UserRole)
 
 
 class ThumbnailPanel(QListWidget):
-    """Lista de miniaturas; emite `pagina_seleccionada` al elegir una."""
+    """Lista de miniaturas; emite `pagina_seleccionada` al elegir una y señales
+    de organización (rotar/eliminar/mover) desde su menú contextual."""
 
     pagina_seleccionada = Signal(int)
+    rotar_solicitado = Signal(int, int)  # indice, grados
+    eliminar_solicitado = Signal(int)  # indice
+    mover_solicitado = Signal(int, int)  # origen, destino
 
     def __init__(self, caso_render: RenderizarPagina) -> None:
         super().__init__()
@@ -36,6 +40,8 @@ class ThumbnailPanel(QListWidget):
         self.setMaximumWidth(ANCHO_MINIATURA_PT_A_PX + 70)
 
         self.currentRowChanged.connect(self._on_fila_cambiada)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._menu_contextual)
         scrollbar = self.verticalScrollBar()
         if scrollbar is not None:
             scrollbar.valueChanged.connect(lambda _: self._render_visibles())
@@ -66,7 +72,34 @@ class ThumbnailPanel(QListWidget):
         self._sincronizando = False
         self._render_visibles()
 
+    def menu_organizacion(self, indice: int) -> QMenu:
+        """Construye el menú contextual de organización para `indice` (testable)."""
+        menu = QMenu(self)
+        menu.addAction(
+            "Rotar a la derecha", lambda: self.rotar_solicitado.emit(indice, 90)
+        )
+        menu.addAction(
+            "Rotar a la izquierda", lambda: self.rotar_solicitado.emit(indice, -90)
+        )
+        menu.addSeparator()
+        if indice > 0:
+            menu.addAction("Subir", lambda: self.mover_solicitado.emit(indice, indice - 1))
+        if indice < self.count() - 1:
+            menu.addAction("Bajar", lambda: self.mover_solicitado.emit(indice, indice + 1))
+        menu.addSeparator()
+        menu.addAction(
+            "Eliminar página", lambda: self.eliminar_solicitado.emit(indice)
+        )
+        return menu
+
     # -- Interno ------------------------------------------------------------
+
+    def _menu_contextual(self, pos: QPoint) -> None:
+        item = self.itemAt(pos)
+        if item is None:
+            return
+        indice = int(item.data(_ROL_INDICE))
+        self.menu_organizacion(indice).exec(self.mapToGlobal(pos))
 
     def _on_fila_cambiada(self, fila: int) -> None:
         if self._sincronizando or fila < 0:

@@ -162,6 +162,45 @@ def test_guardar_limpia_los_cambios(qapp: object, tmp_path: Path) -> None:
     assert ventana._guardar_form.hay_cambios_sin_guardar(documento) is False
 
 
+def test_organizar_eliminar_pagina_actualiza_el_documento(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    ventana.resize(900, 700)
+    ventana.show()
+    ventana.abrir_ruta(_pdf(tmp_path, paginas=4))
+    assert ventana._documento is not None and ventana._documento.num_paginas == 4
+
+    ventana._miniaturas.eliminar_solicitado.emit(1)
+
+    assert ventana._documento.num_paginas == 3
+
+
+def test_organizar_documento_firmado_avisa(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    avisos: list[str] = []
+    monkeypatch.setattr(mw.QMessageBox, "warning", lambda *a, **k: avisos.append(a[1]))
+    ventana = MainWindow()
+    ventana.resize(900, 700)
+    ventana.show()
+    ventana.abrir_ruta(_pdf(tmp_path, paginas=3))
+    documento = ventana._documento
+    assert documento is not None
+    ventana._registro.marcar(documento.id, mw_marca().FIRMADO)
+
+    ventana._miniaturas.rotar_solicitado.emit(0, 90)
+
+    assert avisos  # se avisó y no se organizó
+    assert ventana._documento.num_paginas == 3
+
+
+def mw_marca():  # type: ignore[no-untyped-def]
+    from lectorpdf.adapters.pymupdf.registro import Marca
+
+    return Marca
+
+
 def test_firmar_estampa_y_marca_cambios_sin_guardar(
     qapp: object, tmp_path: Path
 ) -> None:
