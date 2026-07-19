@@ -63,6 +63,10 @@ class RegistroDocumentos:
     def ruta(self, documento_id: str) -> Path:
         return Path(self.obtener(documento_id).name)
 
+    def alto_pagina_pt(self, documento_id: str, pagina: int) -> float:
+        """Alto de la página en puntos (para convertir coords al firmar visible)."""
+        return float(self.obtener(documento_id)[pagina].rect.height)
+
     def bytes_en_disco(self, documento_id: str) -> bytes:
         """Bytes reales del fichero en disco (para verificar firmas: no se puede
         reescribir con fitz sin romper los rangos firmados)."""

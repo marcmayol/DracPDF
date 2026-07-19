@@ -12,6 +12,7 @@ from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentReposi
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import CredencialInvalida, DocumentoFirmado
 from lectorpdf.core.domain.firma_digital import ConfigFirma, CredencialPKCS12
+from lectorpdf.core.domain.formularios import RectanguloPt
 
 
 def _pdf(tmp_path: Path) -> Path:
@@ -44,6 +45,31 @@ def test_firmar_deja_el_documento_firmado(
     # El fichero de disco tiene ahora una firma.
     reabierto = fitz.open(registro.ruta(doc_id))
     assert reabierto.get_sigflags() > 0
+    reabierto.close()
+    registro.cerrar(doc_id)
+
+
+def test_firma_visible_coloca_el_sello_en_el_rect(
+    tmp_path: Path, certificado: tuple[Path, Path, str]
+) -> None:
+    p12, _, pwd = certificado
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))  # página 400x300
+
+    config = ConfigFirma(pagina=0, rect_pt=RectanguloPt(90, 225, 250, 285))
+    servicio.firmar(doc_id, config, CredencialPKCS12(p12, pwd))
+
+    reabierto = fitz.open(registro.ruta(doc_id))
+    firmas = [
+        w
+        for w in reabierto[0].widgets()
+        if w.field_type == fitz.PDF_WIDGET_TYPE_SIGNATURE
+    ]
+    assert len(firmas) == 1
+    rect = firmas[0].rect
+    assert rect.x0 == pytest.approx(90, abs=1)
+    assert rect.y0 == pytest.approx(225, abs=1)
+    assert rect.x1 == pytest.approx(250, abs=1)
+    assert rect.y1 == pytest.approx(285, abs=1)
     reabierto.close()
     registro.cerrar(doc_id)
 

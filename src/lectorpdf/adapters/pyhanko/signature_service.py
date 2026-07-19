@@ -15,8 +15,8 @@ import uuid
 from pathlib import Path
 
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
-from pyhanko.sign import signers
-from pyhanko.sign.fields import SigSeedSubFilter
+from pyhanko.sign import fields, signers
+from pyhanko.sign.fields import SigFieldSpec, SigSeedSubFilter
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import (
@@ -45,16 +45,33 @@ class PyHankoSignatureService:
             raise DocumentoFirmado("El documento ya está firmado: no se puede refirmar")
 
         firmante = self._cargar_firmante(credencial)
+        nombre_campo = f"Firma_{uuid.uuid4().hex[:8]}"
         meta = signers.PdfSignatureMetadata(
-            field_name=f"Firma_{uuid.uuid4().hex[:8]}",
+            field_name=nombre_campo,
             subfilter=SigSeedSubFilter.PADES,
             reason=config.razon,
         )
+        # Sello visible: se calcula la caja en coords PDF (origen abajo) antes de
+        # soltar el handle de fitz. pyHanko rellena el nombre del firmante y la
+        # fecha en la apariencia por defecto del campo.
+        spec = self._campo_visible(documento_id, config, nombre_campo)
 
         # El registro vuelca los cambios pendientes, suelta el handle de fitz,
         # deja que pyHanko firme la ruta y reabre bajo el mismo id (marca FIRMADO).
         self._registro.reescribir_en_disco(
-            documento_id, lambda ruta: self._firmar_fichero(ruta, meta, firmante)
+            documento_id, lambda ruta: self._firmar_fichero(ruta, meta, firmante, spec)
+        )
+
+    def _campo_visible(
+        self, documento_id: str, config: ConfigFirma, nombre_campo: str
+    ) -> SigFieldSpec | None:
+        if config.rect_pt is None:
+            return None
+        alto = self._registro.alto_pagina_pt(documento_id, config.pagina)
+        r = config.rect_pt
+        caja = (r.x0, alto - r.y1, r.x1, alto - r.y0)  # arriba-izq -> abajo-izq
+        return SigFieldSpec(
+            sig_field_name=nombre_campo, box=caja, on_page=config.pagina
         )
 
     # -- Interno ------------------------------------------------------------
@@ -78,6 +95,7 @@ class PyHankoSignatureService:
         ruta: Path,
         meta: signers.PdfSignatureMetadata,
         firmante: signers.SimpleSigner,
+        spec: SigFieldSpec | None,
     ) -> None:
         descriptor, temporal = tempfile.mkstemp(dir=str(ruta.parent), suffix=".pdf")
         os.close(descriptor)
@@ -85,6 +103,8 @@ class PyHankoSignatureService:
         try:
             with open(ruta, "rb") as entrada:
                 escritor = IncrementalPdfFileWriter(entrada)
+                if spec is not None:
+                    fields.append_signature_field(escritor, spec)
                 with open(temporal_path, "wb") as salida:
                     signers.sign_pdf(escritor, meta, signer=firmante, output=salida)
             os.replace(temporal_path, ruta)
