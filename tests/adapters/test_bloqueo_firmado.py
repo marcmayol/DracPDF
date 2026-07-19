@@ -49,7 +49,10 @@ def test_firmar_de_verdad_bloquea_ediciones_posteriores(
 
     p12, _, pwd = certificado
     ruta = tmp_path / "doc.pdf"
-    d = fitz.open(); d.new_page(width=300, height=300); d.save(ruta); d.close()
+    d = fitz.open()
+    d.new_page(width=300, height=300)
+    d.save(ruta)
+    d.close()
 
     registro = RegistroDocumentos()
     documento = PyMuPDFDocumentRepository(registro).abrir(ruta)
