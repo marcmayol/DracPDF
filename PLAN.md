@@ -79,9 +79,9 @@ Fuente de verdad del diseño: proyecto de Claude Design "Identidad Ladón.dc.htm
 Importar vía MCP de claude_design (https://api.anthropic.com/v1/design/mcp, auth con /design-login):
 https://claude.ai/design/p/12145c22-8a62-4f15-bcb7-41d3448492c9?file=Identidad+Lad%C3%B3n.dc.html
 
-1. Importar el diseño con el MCP y extraer los tokens (colores, tipografía, espaciados, radios, estados de firma) a `src/ui/theme/tokens.py`: un dataclass por tema (claro/oscuro), sin valores sueltos por el código
+1. Importar el diseño con el MCP y extraer los tokens (colores, tipografía, espaciados, radios, estados de firma) a `src/lectorpdf/ui/theme/tokens.py`: un dataclass por tema (claro/oscuro), sin valores sueltos por el código
 2. Generar el QSS desde los tokens (plantilla + render en arranque o script de build), con conmutador de tema claro/oscuro en la UI y persistencia de la elección en la configuración
-3. Assets del logo: guardar los SVG del diseño en `assets/` (los SVG sí se versionan, son texto); script `scripts/generar_iconos.py` que genera desde ellos el .ico multiresolución (16/32/48/256) y los PNG para Linux; los binarios generados NO se versionan
+3. Assets del logo: guardar los assets de marca FUENTE del diseño en `assets/brand/` (los SVG de iconos son texto y se versionan siempre; el logo del diseño es PNG ráster afinado a mano por tamaño, y por ser FUENTE —sin él no se reconstruye el icono— también se versiona); script `scripts/generar_iconos.py` que genera desde ellos el .ico multiresolución (16/32/48/256) y los PNG para Linux; los artefactos DERIVADOS por el script (.ico, PNG redimensionados) NO se versionan
 4. Iconografía de toolbar: SVG monocromos recoloreados por tema (abrir, guardar, zoom, navegación, dibujar firma, firmar con certificado, verificar), reemplazando los iconos actuales
 5. Aplicar la identidad: icono de ventana y ejecutable, título de la app, pantalla "acerca de" con el logo; renombrado del binario a "ladon" SOLO si lo confirmo cuando llegue la tarea
 6. Revisión pantalla a pantalla contra las maquetas del diseño: vista principal, modo formulario, diálogo de firma dibujada y panel de verificación con sus tres estados; ajustar QSS hasta la correspondencia razonable
