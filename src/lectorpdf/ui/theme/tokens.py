@@ -64,6 +64,14 @@ RADIOS = Radios()
 ESPACIADO = Espaciado()
 TIPOGRAFIA = Tipografia()
 
+# Paleta de contenido (no depende del tema): el papel de la página, la tinta del
+# trazo de firma (mismo negro de la marca) y el acento de la previsualización de
+# firma. Se centralizan aquí para no dejar colores sueltos por los widgets.
+PAPEL = "#FFFFFF"
+PAPEL_BORDE = "#28000000"  # negro translúcido para el borde de página (AARRGGBB)
+TINTA_FIRMA = "#111318"
+OVERLAY_FIRMA = "#E0534A"
+
 
 TEMA_OSCURO = Tema(
     nombre="oscuro",

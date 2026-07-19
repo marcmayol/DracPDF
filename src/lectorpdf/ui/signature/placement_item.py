@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-_COLOR_BORDE = QColor(37, 99, 235)
+from lectorpdf.ui.theme.tokens import OVERLAY_FIRMA
+
+_COLOR_BORDE = QColor(OVERLAY_FIRMA)
 _TAM_ASA = 14.0
 _ANCHO_MIN = 24.0
 

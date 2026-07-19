@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from lectorpdf.ui.signature.biblioteca_firmas import BibliotecaFirmas
 from lectorpdf.ui.signature.signature_canvas import SignatureCanvas
+from lectorpdf.ui.theme.tokens import PAPEL, TEMA_CLARO
 
 _ROL_ID = int(Qt.ItemDataRole.UserRole)
 
@@ -33,7 +34,9 @@ class SignatureDialog(QDialog):
         self._png: bytes | None = None
 
         self._canvas = SignatureCanvas()
-        self._canvas.setStyleSheet("background: white; border: 1px solid #cbd5e1;")
+        self._canvas.setStyleSheet(
+            f"background: {PAPEL}; border: 1px solid {TEMA_CLARO.border};"
+        )
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("Nombre para guardar (opcional)")
         self._guardar = QCheckBox("Guardar en la biblioteca")

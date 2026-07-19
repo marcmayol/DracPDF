@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         self._construir_barra()
         self._conectar_senales()
 
+        self._visor.aplicar_fondo(self._tema.canvas)
         self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
         self._aplicar_icono_ventana()
@@ -314,6 +315,7 @@ class MainWindow(QMainWindow):
             aplicar_tema(app, nuevo)
         guardar_preferencia_tema(nuevo.nombre)
         self._tema = nuevo
+        self._visor.aplicar_fondo(self._tema.canvas)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
 

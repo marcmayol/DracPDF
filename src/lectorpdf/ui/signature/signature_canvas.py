@@ -22,9 +22,10 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from lectorpdf.ui.signature.suavizado import Punto, curva_catmull_rom
+from lectorpdf.ui.theme.tokens import TINTA_FIRMA
 
 _ANCHO_TRAZO = 2.8
-_COLOR_TRAZO = QColor(15, 23, 42)  # tinta azul muy oscura
+_COLOR_TRAZO = QColor(TINTA_FIRMA)
 _MARGEN_EXPORT = 8
 
 

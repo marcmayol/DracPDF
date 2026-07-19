@@ -15,6 +15,7 @@ from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.ui.forms.coordenadas import RectEscena, rect_escena_a_pdf
 from lectorpdf.ui.signature.placement_item import SignaturePlacementItem
+from lectorpdf.ui.theme.tokens import OVERLAY_FIRMA
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
 _FRACCION_ANCHO = 0.4
@@ -106,10 +107,12 @@ class DigitalSealLayer:
 
 
 def _placeholder(ancho: int, alto: int) -> QPixmap:
+    relleno = QColor(OVERLAY_FIRMA)
+    relleno.setAlpha(30)
     pixmap = QPixmap(max(ancho, 1), max(alto, 1))
-    pixmap.fill(QColor(37, 99, 235, 30))
+    pixmap.fill(relleno)
     pintor = QPainter(pixmap)
-    pintor.setPen(QPen(QColor(37, 99, 235), 1, Qt.PenStyle.DashLine))
+    pintor.setPen(QPen(QColor(OVERLAY_FIRMA), 1, Qt.PenStyle.DashLine))
     pintor.drawRect(0, 0, pixmap.width() - 1, pixmap.height() - 1)
     pintor.drawText(
         QRectF(0, 0, pixmap.width(), pixmap.height()),

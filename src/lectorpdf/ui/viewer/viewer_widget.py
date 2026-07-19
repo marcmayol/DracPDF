@@ -20,14 +20,14 @@ from PySide6.QtWidgets import (
 
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.ui.theme.tokens import PAPEL, PAPEL_BORDE, TEMA_POR_DEFECTO
 from lectorpdf.ui.viewer.cache_lru import CacheLRU
 from lectorpdf.ui.viewer.imagen import qpixmap_desde
 
 MARGEN_PX = 12.0
 _CAPACIDAD_CACHE = 24
-_COLOR_FONDO_VISTA = QColor(82, 86, 89)
-_COLOR_PAGINA = QColor(255, 255, 255)
-_COLOR_BORDE = QColor(0, 0, 0, 40)
+_COLOR_PAGINA = QColor(PAPEL)
+_COLOR_BORDE = QColor(PAPEL_BORDE)
 
 ESCALA_MIN = 0.1
 ESCALA_MAX = 8.0
@@ -60,8 +60,12 @@ class ViewerWidget(QGraphicsView):
 
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
-        self.setBackgroundBrush(QBrush(_COLOR_FONDO_VISTA))
+        self.setBackgroundBrush(QBrush(QColor(TEMA_POR_DEFECTO.canvas)))
         self.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+
+    def aplicar_fondo(self, color_hex: str) -> None:
+        """Fija el color del lienzo tras las páginas (token `canvas` del tema)."""
+        self.setBackgroundBrush(QBrush(QColor(color_hex)))
 
     @property
     def documento(self) -> Documento | None:
