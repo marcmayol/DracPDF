@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
+from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
@@ -31,6 +32,7 @@ from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
@@ -38,6 +40,7 @@ from lectorpdf.ui.signature.biblioteca_firmas import (
 )
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
+from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
@@ -52,6 +55,7 @@ class MainWindow(QMainWindow):
         self._repositorio = PyMuPDFDocumentRepository(self._registro)
         self._servicio_form = PyMuPDFFormService(self._registro)
         self._servicio_estampado = PyMuPDFEstampadoService(self._registro)
+        self._servicio_firma = PyHankoSignatureService(self._registro)
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -59,6 +63,7 @@ class MainWindow(QMainWindow):
         self._rellenar = RellenarCampo(self._servicio_form)
         self._guardar_form = GuardarFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
+        self._verificar = VerificarFirmas(self._servicio_firma)
 
         self._documento: Documento | None = None
 
@@ -70,6 +75,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._visor)
 
         self._construir_dock_miniaturas()
+        self._panel_verificacion = VerificationPanel()
+        self._construir_dock_verificacion()
         self._etiqueta_pagina = QLabel("—")
         self._construir_barra()
         self._conectar_senales()
@@ -87,6 +94,11 @@ class MainWindow(QMainWindow):
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+
+    def _construir_dock_verificacion(self) -> None:
+        dock = QDockWidget("Firmas digitales", self)
+        dock.setWidget(self._panel_verificacion)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     def _construir_barra(self) -> None:
         barra = QToolBar("Navegación", self)
@@ -106,6 +118,8 @@ class MainWindow(QMainWindow):
         self._accion(barra, "Firmar…", self._iniciar_firma)
         self._accion(barra, "✓ Colocar", self._confirmar_firma)
         self._accion(barra, "✗ Cancelar firma", self._capa_firma.cancelar)
+        barra.addSeparator()
+        self._accion(barra, "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
         barra.addWidget(self._etiqueta_pagina)
 
@@ -170,6 +184,20 @@ class MainWindow(QMainWindow):
             self._capa_firma.confirmar()
         except ErrorDominio as exc:
             QMessageBox.warning(self, "No se pudo estampar la firma", str(exc))
+
+    def _verificar_firmas(self) -> None:
+        if self._documento is None:
+            return
+        # Ancla de confianza opcional (certificado en DER/PEM/CER).
+        ruta_ancla, _ = QFileDialog.getOpenFileName(
+            self,
+            "Certificado de confianza (opcional)",
+            "",
+            "Certificados (*.der *.pem *.cer *.crt)",
+        )
+        anclas = [Path(ruta_ancla)] if ruta_ancla else []
+        resultados = self._verificar.ejecutar(self._documento, anclas)
+        self._panel_verificacion.mostrar(resultados)
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

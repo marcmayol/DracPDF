@@ -9,15 +9,22 @@ La firma es una revisión incremental final, así que cubre todo lo anterior
 
 from __future__ import annotations
 
+import io
+import logging
 import os
 import tempfile
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
+from asn1crypto import x509
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign import fields, signers
 from pyhanko.sign.fields import SigFieldSpec, SigSeedSubFilter
 from pyhanko.sign.timestamps import HTTPTimeStamper
+from pyhanko.sign.validation import validate_pdf_signature
+from pyhanko_certvalidator import ValidationContext
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import (
@@ -29,7 +36,13 @@ from lectorpdf.core.domain.firma_digital import (
     ConfigFirma,
     CredencialFirma,
     CredencialPKCS12,
+    EstadoFirma,
+    ResultadoVerificacion,
 )
+
+# pyHanko registra con traceback las modificaciones sospechosas al verificar;
+# se refleja en el estado, así que se baja el ruido de ese logger.
+logging.getLogger("pyhanko.sign.diff_analysis").setLevel(logging.CRITICAL)
 
 
 class PyHankoSignatureService:
@@ -64,6 +77,58 @@ class PyHankoSignatureService:
             documento_id,
             lambda ruta: self._firmar_fichero(ruta, meta, firmante, spec, sellador),
         )
+
+    def verificar(
+        self,
+        documento_id: str,
+        anclas_confianza: Sequence[Path],
+    ) -> tuple[ResultadoVerificacion, ...]:
+        datos = self._registro.bytes_en_disco(documento_id)
+        anclas = [x509.Certificate.load(Path(a).read_bytes()) for a in anclas_confianza]
+        resultados: list[ResultadoVerificacion] = []
+        with io.BytesIO(datos) as flujo:
+            lector = PdfFileReader(flujo)
+            for firma in lector.embedded_signatures:
+                resultados.append(self._verificar_una(firma, anclas))
+        return tuple(resultados)
+
+    def _verificar_una(
+        self, firma: object, anclas: list[object]
+    ) -> ResultadoVerificacion:
+        contexto = ValidationContext(trust_roots=anclas)
+        try:
+            estado = validate_pdf_signature(firma, contexto)
+        except Exception as exc:
+            return ResultadoVerificacion(
+                firmante="(desconocido)",
+                estado=EstadoFirma.INVALIDA,
+                cubre_todo_el_documento=False,
+                sellada_en_tiempo=False,
+                motivo=f"No se pudo validar la firma: {exc}",
+            )
+
+        cubre_todo = getattr(estado.coverage, "name", "") == "ENTIRE_FILE"
+        firmante = _nombre_firmante(estado)
+        sellada = estado.timestamp_validity is not None
+
+        if not estado.intact or not estado.valid:
+            tipo, motivo = (
+                EstadoFirma.INVALIDA,
+                "La firma no es íntegra: los bytes firmados no coinciden.",
+            )
+        elif not cubre_todo:
+            tipo, motivo = (
+                EstadoFirma.INVALIDA,
+                "El documento se modificó tras la firma (la firma no lo cubre entero).",
+            )
+        elif estado.trusted:
+            tipo, motivo = EstadoFirma.VALIDA, "Firma válida y de confianza."
+        else:
+            tipo, motivo = (
+                EstadoFirma.DESCONOCIDA,
+                "Firma íntegra, pero el firmante no es de confianza.",
+            )
+        return ResultadoVerificacion(firmante, tipo, cubre_todo, sellada, motivo)
 
     def _timestamper(self, config: ConfigFirma) -> HTTPTimeStamper | None:
         """Sellado de tiempo opcional. Devuelve None si la TSA está deshabilitada
@@ -130,3 +195,11 @@ class PyHankoSignatureService:
         except Exception as exc:
             temporal_path.unlink(missing_ok=True)
             raise ErrorDeFirma(f"No se pudo firmar el documento: {exc}") from exc
+
+
+def _nombre_firmante(estado: object) -> str:
+    cert = getattr(estado, "signing_cert", None)
+    if cert is None:
+        return "(desconocido)"
+    nombre = cert.subject.native.get("common_name")
+    return str(nombre) if nombre else str(cert.subject.human_friendly)
