@@ -10,7 +10,7 @@ from pathlib import Path
 
 import fitz
 
-from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import CampoNoEncontrado
 from lectorpdf.core.domain.formularios import (
     CampoFormulario,
@@ -33,9 +33,8 @@ class PyMuPDFFormService:
     def __init__(self, registro: RegistroDocumentos) -> None:
         self._registro = registro
         # PyMuPDF no limpia doc.is_dirty tras un guardado incremental (queda
-        # True), así que rastreamos aquí qué documentos tienen ediciones sin
-        # guardar desde el último guardado.
-        self._con_cambios: set[str] = set()
+        # True), así que el estado "sin guardar" se rastrea con marcas propias en
+        # el registro compartido (así lo comparten formularios y estampado).
 
     def es_xfa(self, documento_id: str) -> bool:
         doc = self._registro.obtener(documento_id)
@@ -65,12 +64,12 @@ class PyMuPDFFormService:
             if i == indice:
                 widget.field_value = valor
                 widget.update()  # regenera la apariencia del campo en el PDF
-                self._con_cambios.add(documento_id)
+                self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
                 return
         raise CampoNoEncontrado(campo_id)
 
     def esta_sucio(self, documento_id: str) -> bool:
-        return documento_id in self._con_cambios
+        return self._registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         doc = self._registro.obtener(documento_id)
@@ -80,7 +79,7 @@ class PyMuPDFFormService:
             )
         else:
             doc.save(str(destino))
-        self._con_cambios.discard(documento_id)
+        self._registro.desmarcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
 
 def _partir_id(campo_id: str) -> tuple[int, int]:
