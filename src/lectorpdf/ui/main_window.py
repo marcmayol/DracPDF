@@ -34,6 +34,7 @@ from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
@@ -96,6 +97,7 @@ class MainWindow(QMainWindow):
         self._organizar = OrganizarPaginas(self._servicio_herr)
         self._dividir = DividirPdf(self._servicio_herr)
         self._proteger = ProtegerPdf(self._servicio_herr)
+        self._desproteger = DesprotegerPdf(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -185,6 +187,7 @@ class MainWindow(QMainWindow):
         self._accion_menu(menu, "Dividir PDF…", self._menu_dividir)
         menu.addSeparator()
         self._accion_menu(menu, "Proteger con contraseña…", self._menu_proteger)
+        self._accion_menu(menu, "Quitar contraseña…", self._menu_desproteger)
 
     def _accion_menu(
         self, menu: QMenu, texto: str, callback: Callable[[], None]
@@ -482,6 +485,32 @@ class MainWindow(QMainWindow):
             lambda p: self._proteger.ejecutar(doc, destino, contrasena),
         )
         self._tras_tarea(res, f"PDF protegido guardado en:\n{destino}")
+
+    def _menu_desproteger(self) -> None:
+        ruta_str, _ = QFileDialog.getOpenFileName(
+            self, "PDF protegido", "", "Documentos PDF (*.pdf)"
+        )
+        if not ruta_str:
+            return
+        ruta = Path(ruta_str)
+        contrasena, ok = QInputDialog.getText(
+            self, "Quitar contraseña", "Contraseña:", QLineEdit.EchoMode.Password
+        )
+        if not ok:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF sin protección", "sin_proteccion.pdf",
+            "Documentos PDF (*.pdf)",
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self,
+            "Quitando protección…",
+            lambda p: self._desproteger.ejecutar(ruta, contrasena, destino),
+        )
+        self._tras_tarea(res, f"PDF sin protección guardado en:\n{destino}")
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""
