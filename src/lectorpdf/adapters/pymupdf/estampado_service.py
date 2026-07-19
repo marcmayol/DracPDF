@@ -10,7 +10,7 @@ from __future__ import annotations
 import fitz
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
-from lectorpdf.core.domain.errores import PaginaFueraDeRango
+from lectorpdf.core.domain.errores import DocumentoFirmado, PaginaFueraDeRango
 from lectorpdf.core.domain.formularios import RectanguloPt
 
 
@@ -25,6 +25,8 @@ class PyMuPDFEstampadoService:
         rect_pt: RectanguloPt,
         imagen_png: bytes,
     ) -> None:
+        if self._registro.tiene(documento_id, Marca.FIRMADO):
+            raise DocumentoFirmado("El documento está firmado: no se puede estampar")
         doc = self._registro.obtener(documento_id)
         if pagina < 0 or pagina >= doc.page_count:
             raise PaginaFueraDeRango(

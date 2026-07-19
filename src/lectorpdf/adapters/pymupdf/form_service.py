@@ -11,7 +11,7 @@ from pathlib import Path
 import fitz
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
-from lectorpdf.core.domain.errores import CampoNoEncontrado
+from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoFirmado
 from lectorpdf.core.domain.formularios import (
     CampoFormulario,
     RectanguloPt,
@@ -56,6 +56,8 @@ class PyMuPDFFormService:
         return tuple(campos)
 
     def escribir_valor(self, documento_id: str, campo_id: str, valor: str) -> None:
+        if self._registro.tiene(documento_id, Marca.FIRMADO):
+            raise DocumentoFirmado("El documento está firmado: no se puede editar")
         doc = self._registro.obtener(documento_id)
         pagina, indice = _partir_id(campo_id)
         if pagina < 0 or pagina >= doc.page_count:
