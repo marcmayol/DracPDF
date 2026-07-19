@@ -21,3 +21,19 @@ class DocumentoNoAbierto(ErrorDominio):
 
 class PaginaFueraDeRango(ErrorDominio):
     """Se solicita una página con índice fuera de [0, num_paginas)."""
+
+
+class FormularioXFANoSoportado(ErrorDominio):
+    """El documento usa formularios XFA, no soportados (solo AcroForm)."""
+
+
+class CampoNoEncontrado(ErrorDominio):
+    """No existe ningún campo con el id indicado en el documento."""
+
+
+class CampoSoloLectura(ErrorDominio):
+    """Se intenta escribir en un campo marcado como de solo lectura."""
+
+
+class ValorDeCampoInvalido(ErrorDominio):
+    """El valor no es válido para el tipo de campo (p. ej. no está entre las opciones)."""

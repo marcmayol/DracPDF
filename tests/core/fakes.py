@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lectorpdf.core.domain.errores import DocumentoNoAbierto
+from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoNoAbierto
+from lectorpdf.core.domain.formularios import CampoFormulario
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada
 
 
@@ -42,3 +43,37 @@ class FakeDocumentRepository:
 
     def cerrar(self, documento_id: str) -> None:
         self.cerrado.append(documento_id)
+
+
+class FakeFormService:
+    """Fake en memoria de `FormService`. Registra escrituras y guardados."""
+
+    def __init__(
+        self,
+        campos: tuple[CampoFormulario, ...] = (),
+        es_xfa: bool = False,
+    ) -> None:
+        self._campos = campos
+        self._es_xfa = es_xfa
+        self.escrituras: list[tuple[str, str, str]] = []
+        self.guardados: list[tuple[str, Path | None]] = []
+        self.sucio = False
+
+    def es_xfa(self, documento_id: str) -> bool:
+        return self._es_xfa
+
+    def listar_campos(self, documento_id: str) -> tuple[CampoFormulario, ...]:
+        return self._campos
+
+    def escribir_valor(self, documento_id: str, campo_id: str, valor: str) -> None:
+        if all(c.id != campo_id for c in self._campos):
+            raise CampoNoEncontrado(campo_id)
+        self.escrituras.append((documento_id, campo_id, valor))
+        self.sucio = True
+
+    def esta_sucio(self, documento_id: str) -> bool:
+        return self.sucio
+
+    def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
+        self.guardados.append((documento_id, destino))
+        self.sucio = False
