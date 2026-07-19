@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtWidgets import QLineEdit
+
 from lectorpdf.core.domain.formularios import (
     CampoFormulario,
     RectanguloPt,
     TipoCampo,
 )
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
+from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget
-from tests.core.fakes import FakeDocumentRepository
+from tests.core.fakes import FakeDocumentRepository, FakeFormService
 
 
 def _documento(num_paginas: int = 3) -> Documento:
@@ -88,6 +91,30 @@ def test_proxy_se_realinea_tras_zoom(qapp: object) -> None:
     assert rect.left() == origen.left() + 100.0
     assert rect.width() == 400.0
     assert rect.height() == 40.0
+
+
+def test_editar_proxy_escribe_y_actualiza_cache(qapp: object) -> None:
+    documento = _documento()
+    visor = _visor(documento)
+    campo = _campo("0:0", pagina=0)
+    servicio = FakeFormService(campos=(campo,))
+    capa = FormLayer(visor, RellenarCampo(servicio))
+    visor.set_documento(documento)
+    capa.set_campos((campo,), documento=documento)
+
+    editor = capa.proxies()["0:0"].widget()
+    assert isinstance(editor, QLineEdit)
+    editor.setText("Marc")
+    editor.editingFinished.emit()
+
+    # Se escribió en el servicio...
+    assert servicio.escrituras == [("doc-1", "0:0", "Marc")]
+
+    # ...y al reconstruir la escena (zoom) el proxy recreado muestra el valor nuevo.
+    visor.set_escala(2.0)
+    editor2 = capa.proxies()["0:0"].widget()
+    assert isinstance(editor2, QLineEdit)
+    assert editor2.text() == "Marc"
 
 
 def test_no_crea_proxies_de_paginas_no_visibles(qapp: object) -> None:

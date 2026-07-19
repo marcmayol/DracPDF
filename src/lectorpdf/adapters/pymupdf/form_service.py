@@ -6,9 +6,12 @@ sobre el mismo `fitz.Document` sin conocer al resto de adaptadores.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import fitz
 
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.core.domain.errores import CampoNoEncontrado
 from lectorpdf.core.domain.formularios import (
     CampoFormulario,
     RectanguloPt,
@@ -29,6 +32,10 @@ class PyMuPDFFormService:
 
     def __init__(self, registro: RegistroDocumentos) -> None:
         self._registro = registro
+        # PyMuPDF no limpia doc.is_dirty tras un guardado incremental (queda
+        # True), así que rastreamos aquí qué documentos tienen ediciones sin
+        # guardar desde el último guardado.
+        self._con_cambios: set[str] = set()
 
     def es_xfa(self, documento_id: str) -> bool:
         doc = self._registro.obtener(documento_id)
@@ -48,6 +55,40 @@ class PyMuPDFFormService:
                     continue  # firma, botón de acción, etc.: no editables aquí
                 campos.append(_a_campo(widget, pno, idx, tipo))
         return tuple(campos)
+
+    def escribir_valor(self, documento_id: str, campo_id: str, valor: str) -> None:
+        doc = self._registro.obtener(documento_id)
+        pagina, indice = _partir_id(campo_id)
+        if pagina < 0 or pagina >= doc.page_count:
+            raise CampoNoEncontrado(campo_id)
+        for i, widget in enumerate(doc[pagina].widgets()):
+            if i == indice:
+                widget.field_value = valor
+                widget.update()  # regenera la apariencia del campo en el PDF
+                self._con_cambios.add(documento_id)
+                return
+        raise CampoNoEncontrado(campo_id)
+
+    def esta_sucio(self, documento_id: str) -> bool:
+        return documento_id in self._con_cambios
+
+    def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
+        doc = self._registro.obtener(documento_id)
+        if destino is None:
+            doc.save(
+                doc.name, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP
+            )
+        else:
+            doc.save(str(destino))
+        self._con_cambios.discard(documento_id)
+
+
+def _partir_id(campo_id: str) -> tuple[int, int]:
+    try:
+        pagina_txt, indice_txt = campo_id.split(":", 1)
+        return int(pagina_txt), int(indice_txt)
+    except ValueError as exc:
+        raise CampoNoEncontrado(campo_id) from exc
 
 
 def _a_campo(

@@ -6,6 +6,8 @@ las señales de edición (para escribir en el documento) se añade en la tarea 3
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from lectorpdf.core.domain.formularios import CampoFormulario, TipoCampo
+
+_ESTADO_OFF = "Off"
 
 
 def crear_widget(campo: CampoFormulario) -> QWidget:
@@ -56,3 +60,27 @@ def _crear(campo: CampoFormulario) -> QWidget:
 
 def _marcado(campo: CampoFormulario) -> bool:
     return campo.estado_activado is not None and campo.valor == campo.estado_activado
+
+
+def conectar_edicion(
+    widget: QWidget, campo: CampoFormulario, al_editar: Callable[[str], None]
+) -> None:
+    """Conecta la señal de fin de edición del widget para propagar el nuevo valor.
+
+    Texto: al perder el foco (`editingFinished`), no en cada tecla. Casilla/radio:
+    al alternar. Combo/lista: al cambiar la selección (eventos discretos).
+    """
+    if campo.solo_lectura:
+        return
+    on = campo.estado_activado or ""
+
+    if isinstance(widget, QLineEdit):
+        widget.editingFinished.connect(lambda: al_editar(widget.text()))
+    elif isinstance(widget, QCheckBox):
+        widget.toggled.connect(
+            lambda marcado: al_editar(on if marcado else _ESTADO_OFF)
+        )
+    elif isinstance(widget, QRadioButton):
+        widget.toggled.connect(lambda marcado: al_editar(on) if marcado else None)
+    elif isinstance(widget, QComboBox | QListWidget):
+        widget.currentTextChanged.connect(al_editar)
