@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoNoAbierto
+from lectorpdf.core.domain.firma_digital import (
+    ConfigFirma,
+    CredencialFirma,
+    ResultadoVerificacion,
+)
 from lectorpdf.core.domain.formularios import CampoFormulario, RectanguloPt
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada
 
@@ -93,3 +99,28 @@ class FakeEstampadoService:
         imagen_png: bytes,
     ) -> None:
         self.estampados.append((documento_id, pagina, rect_pt, imagen_png))
+
+
+class FakeSignatureService:
+    """Fake en memoria de `SignatureService`."""
+
+    def __init__(self, resultados: tuple[ResultadoVerificacion, ...] = ()) -> None:
+        self._resultados = resultados
+        self.firmas: list[tuple[str, ConfigFirma, CredencialFirma]] = []
+        self.verificaciones: list[str] = []
+
+    def firmar(
+        self,
+        documento_id: str,
+        config: ConfigFirma,
+        credencial: CredencialFirma,
+    ) -> None:
+        self.firmas.append((documento_id, config, credencial))
+
+    def verificar(
+        self,
+        documento_id: str,
+        anclas_confianza: Sequence[Path],
+    ) -> tuple[ResultadoVerificacion, ...]:
+        self.verificaciones.append(documento_id)
+        return self._resultados

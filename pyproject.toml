@@ -52,5 +52,14 @@ packages = ["lectorpdf"]
 
 # Los adaptadores dependen de librerías sin type stubs completos.
 [[tool.mypy.overrides]]
-module = ["fitz", "fitz.*"]
+module = [
+    "fitz",
+    "fitz.*",
+    "pyhanko.*",
+    "pyhanko_certvalidator.*",
+    "asn1crypto.*",
+]
 ignore_missing_imports = true
+# pyHanko trae tipos parciales; lo tratamos como no tipado para no arrastrar sus
+# firmas incompletas a nuestro código estricto.
+follow_imports = "skip"

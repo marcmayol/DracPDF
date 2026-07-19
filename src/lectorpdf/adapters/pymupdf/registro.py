@@ -11,6 +11,7 @@ rutas/bytes/ids de aquí, nunca fitz.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from enum import Enum, auto
 from pathlib import Path
 
@@ -85,6 +86,30 @@ class RegistroDocumentos:
         doc = self.obtener(documento_id)
         ruta = Path(doc.name)
         doc.close()
+        self._reabrir(documento_id, ruta)
+
+    def reescribir_en_disco(
+        self, documento_id: str, operacion: Callable[[Path], None]
+    ) -> None:
+        """Deja que una herramienta externa (p. ej. pyHanko) reescriba el fichero.
+
+        Vuelca primero los cambios pendientes (incremental), suelta el handle de
+        fitz (imprescindible en Windows para que la herramienta pueda reemplazar
+        el fichero), ejecuta `operacion(ruta)` y reabre el resultado bajo el mismo
+        id, recomputando FIRMADO. El reabrir va en `finally`: pase lo que pase, el
+        registro nunca queda a medio recargar.
+        """
+        doc = self.obtener(documento_id)
+        ruta = Path(doc.name)
+        if self.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR):
+            doc.save(str(ruta), incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+        doc.close()
+        try:
+            operacion(ruta)
+        finally:
+            self._reabrir(documento_id, ruta)
+
+    def _reabrir(self, documento_id: str, ruta: Path) -> None:
         nuevo = fitz.open(ruta)
         self._documentos[documento_id] = nuevo
         self.desmarcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)

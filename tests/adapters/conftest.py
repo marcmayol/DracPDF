@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.adapters.certificado_prueba import generar_pkcs12
 from tests.adapters.generar_fixtures import generar_pdf_simple
 from tests.adapters.generar_fixtures_formularios import (
     generar_formulario_completo,
@@ -29,3 +30,10 @@ def pdf_formulario(tmp_path: Path) -> Path:
 def pdf_xfa(tmp_path: Path) -> Path:
     """PDF con entrada /XFA en el AcroForm."""
     return generar_xfa(tmp_path / "xfa.pdf")
+
+
+@pytest.fixture
+def certificado(tmp_path: Path) -> tuple[Path, Path, str]:
+    """Genera un PKCS#12 de prueba. Devuelve (p12, cert_der, contraseña)."""
+    p12, der = generar_pkcs12(tmp_path / "cert", contrasena="prueba")
+    return p12, der, "prueba"
