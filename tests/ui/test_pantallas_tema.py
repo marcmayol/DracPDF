@@ -18,7 +18,7 @@ from lectorpdf.ui.signature.signature_canvas import SignatureCanvas
 from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.theme import tokens
-from lectorpdf.ui.theme.estilos import aplicar_tema
+from lectorpdf.ui.theme.estilos import aplicar_tema, guardar_preferencia_tema
 from tests.adapters.generar_fixtures_formularios import generar_formulario_completo
 
 _TEMAS = [tokens.TEMA_OSCURO, tokens.TEMA_CLARO]
@@ -32,21 +32,23 @@ def _app() -> QApplication:
 
 @pytest.mark.parametrize("tema", _TEMAS)
 def test_vista_principal_arranca_con_el_tema(qapp: object, tema: tokens.Tema) -> None:
-    aplicar_tema(_app(), tema)
+    guardar_preferencia_tema(tema.nombre)  # la ventana aplica su propio tema
 
     ventana = MainWindow()
     ventana.resize(1000, 700)
     ventana.show()
 
     assert ventana.centralWidget() is ventana._visor
+    assert ventana._tema is tema
     assert tema.bg in _app().styleSheet()
+    assert ventana._visor.backgroundBrush().color().name() == tema.canvas.lower()
 
 
 @pytest.mark.parametrize("tema", _TEMAS)
 def test_modo_formulario_sobrevive_al_tema(
     qapp: object, tmp_path: Path, tema: tokens.Tema
 ) -> None:
-    aplicar_tema(_app(), tema)
+    guardar_preferencia_tema(tema.nombre)
     ventana = MainWindow()
     ventana.resize(1000, 700)
     ventana.show()

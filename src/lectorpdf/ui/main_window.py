@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         self._construir_barra()
         self._conectar_senales()
 
-        self._visor.aplicar_fondo(self._tema.canvas)
+        self._aplicar_tema_actual()
         self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
         self._aplicar_icono_ventana()
@@ -109,6 +109,16 @@ class MainWindow(QMainWindow):
         ruta = ruta_icono_app()
         if ruta is not None:
             self.setWindowIcon(QIcon(str(ruta)))
+
+    def _aplicar_tema_actual(self) -> None:
+        """Aplica el tema (QSS + fondo del visor + iconos) desde self._tema, que
+        es la única fuente de verdad del tema en la ventana."""
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            aplicar_tema(app, self._tema)
+        self._visor.aplicar_fondo(self._tema.canvas)
+        for accion, nombre_icono in self._acciones_icono:
+            accion.setIcon(icono(nombre_icono, self._tema.text))
 
     # -- Construcción de la UI ----------------------------------------------
 
@@ -309,15 +319,9 @@ class MainWindow(QMainWindow):
             self.abrir_ruta_con_aviso(Path(ruta_str))
 
     def _conmutar_tema(self) -> None:
-        nuevo = TEMA_CLARO if self._tema.es_oscuro else TEMA_OSCURO
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            aplicar_tema(app, nuevo)
-        guardar_preferencia_tema(nuevo.nombre)
-        self._tema = nuevo
-        self._visor.aplicar_fondo(self._tema.canvas)
-        for accion, nombre_icono in self._acciones_icono:
-            accion.setIcon(icono(nombre_icono, self._tema.text))
+        self._tema = TEMA_CLARO if self._tema.es_oscuro else TEMA_OSCURO
+        guardar_preferencia_tema(self._tema.nombre)
+        self._aplicar_tema_actual()
 
     def _mostrar_acerca_de(self) -> None:
         AboutDialog(self._tema.es_oscuro, self).exec()
