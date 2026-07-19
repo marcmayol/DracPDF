@@ -15,6 +15,9 @@ dist/
 # Fixtures generados (se crean con script, no se versionan)
 tests/adapters/fixtures/*.pdf
 
+# Iconos derivados (se generan con scripts/generar_iconos.py desde assets/brand/)
+build/
+
 # IDE / SO
 .idea/
 .vscode/
