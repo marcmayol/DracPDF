@@ -32,6 +32,7 @@ from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
@@ -43,6 +44,7 @@ from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
@@ -89,6 +91,7 @@ class MainWindow(QMainWindow):
         self._verificar = VerificarFirmas(self._servicio_firma)
         self._unir = UnirPdf(self._servicio_herr)
         self._organizar = OrganizarPaginas(self._servicio_herr)
+        self._dividir = DividirPdf(self._servicio_herr)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -175,6 +178,7 @@ class MainWindow(QMainWindow):
     def _construir_menu(self) -> None:
         menu = self.menuBar().addMenu("Herramientas")
         self._accion_menu(menu, "Unir PDF…", self._menu_unir)
+        self._accion_menu(menu, "Dividir PDF…", self._menu_dividir)
 
     def _accion_menu(
         self, menu: QMenu, texto: str, callback: Callable[[], None]
@@ -408,6 +412,48 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No se pudo completar", str(res.error))
             return
         QMessageBox.information(self, "Hecho", mensaje_ok)
+
+    def _documento_o_aviso(self, titulo: str) -> Documento | None:
+        if self._documento is None:
+            QMessageBox.information(self, titulo, "Abre un PDF primero.")
+        return self._documento
+
+    def _menu_dividir(self) -> None:
+        doc = self._documento_o_aviso("Dividir")
+        if doc is None:
+            return
+        dialogo = DividirDialog(self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        directorio = QFileDialog.getExistingDirectory(
+            self, "Carpeta donde guardar las partes"
+        )
+        if not directorio:
+            return
+        salida = Path(directorio)
+
+        if dialogo.es_por_pagina():
+            res = ejecutar_con_progreso(
+                self, "Dividiendo PDF…", lambda p: self._dividir.por_paginas(doc, salida)
+            )
+        else:
+            try:
+                rangos = dialogo.rangos()
+            except ValueError as exc:
+                QMessageBox.warning(self, "Rangos inválidos", str(exc))
+                return
+            res = ejecutar_con_progreso(
+                self,
+                "Dividiendo PDF…",
+                lambda p: self._dividir.por_rangos(doc, rangos, salida),
+            )
+        if res.cancelado or res.error is not None:
+            self._tras_tarea(res, "")
+            return
+        rutas = res.resultado if isinstance(res.resultado, list) else []
+        QMessageBox.information(
+            self, "Hecho", f"Generados {len(rutas)} ficheros en:\n{salida}"
+        )
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""

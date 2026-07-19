@@ -111,3 +111,23 @@ def test_no_se_puede_eliminar_la_ultima_pagina(tmp_path: Path) -> None:
     with pytest.raises(SinPaginas):
         servicio.eliminar_pagina(doc_id, 0)
     registro.cerrar(doc_id)
+
+
+# -- Dividir ----------------------------------------------------------------
+
+
+def test_dividir_por_rangos_genera_ficheros(tmp_path: Path) -> None:
+    from lectorpdf.core.domain.herramientas import Rango
+
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B", "C", "D"]))
+    salida = tmp_path / "partes"
+
+    rutas = servicio.dividir(doc_id, [Rango(1, 2), Rango(3, 4)], salida)
+
+    assert len(rutas) == 2
+    assert all(r.is_file() for r in rutas)
+    parte1 = fitz.open(rutas[0])
+    assert parte1.page_count == 2
+    assert parte1[0].get_text().strip() == "A"
+    parte1.close()
+    registro.cerrar(doc_id)
