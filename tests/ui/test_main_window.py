@@ -180,6 +180,59 @@ def test_pestana_indice_oculta_sin_outline(qapp: object, tmp_path: Path) -> None
     assert not ventana._panel_lateral.isTabVisible(ventana._idx_tab_indice)
 
 
+# -- Enlaces e ir a página (Fase 8) -----------------------------------------
+
+
+def test_enlace_interno_navega(qapp: object, tmp_path: Path) -> None:
+    from lectorpdf.core.domain.contenido import Enlace
+    from lectorpdf.core.domain.formularios import RectanguloPt
+
+    ventana = MainWindow()
+    ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+
+    ventana._capa_enlaces._activar(Enlace(RectanguloPt(0, 0, 1, 1), pagina_destino=2))
+
+    assert ventana._visor.pagina_actual() == 2
+
+
+def test_enlace_externo_confirma_y_abre(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lectorpdf.core.domain.contenido import Enlace
+    from lectorpdf.core.domain.formularios import RectanguloPt
+
+    ventana = MainWindow()
+    ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: mw.QMessageBox.StandardButton.Open,
+    )
+    abiertas: list[str] = []
+    monkeypatch.setattr(
+        mw.QDesktopServices, "openUrl", lambda url: abiertas.append(url.toString())
+    )
+
+    ventana._capa_enlaces._activar(
+        Enlace(RectanguloPt(0, 0, 1, 1), uri="https://example.com/")
+    )
+
+    assert abiertas == ["https://example.com/"]
+
+
+def test_ir_a_pagina_dialogo(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ventana = MainWindow()
+    ventana.abrir_ruta(_pdf(tmp_path, paginas=5))
+
+    monkeypatch.setattr(mw.QInputDialog, "getInt", lambda *a, **k: (3, True))
+    ventana._ir_a_pagina_dialogo()
+
+    assert ventana._visor.pagina_actual() == 2  # página 3 (1-based) -> índice 2
+
+
 # -- Formularios ------------------------------------------------------------
 
 

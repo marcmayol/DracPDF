@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QGraphicsRectItem
 from lectorpdf.core.domain.contenido import PalabraTexto
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
-from lectorpdf.ui.forms.coordenadas import punto_escena_a_pdf, rect_pdf_a_escena
+from lectorpdf.ui.forms.coordenadas import rect_pdf_a_escena
 from lectorpdf.ui.seleccion import seleccion
 from lectorpdf.ui.theme import tokens
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
@@ -41,7 +41,7 @@ def _pincel_seleccion() -> QBrush:
 
 class SeleccionLayer(QObject):
     def __init__(self, visor: ViewerWidget, caso_palabras: ObtenerPalabras) -> None:
-        super().__init__(visor)
+        super().__init__()
         self._visor = visor
         self._caso = caso_palabras
         self._documento: Documento | None = None
@@ -108,21 +108,7 @@ class SeleccionLayer(QObject):
     # -- Traducción ratón → (página, punto en puntos) -----------------------
 
     def _pagina_y_punto(self, pos: QPoint) -> tuple[int, float, float] | None:
-        escena = self._visor.mapToScene(pos)
-        pagina = self._visor.pagina_en_punto(escena)
-        if pagina is None:
-            return None
-        rect_pagina = self._visor.rect_pagina(pagina)
-        if rect_pagina is None:
-            return None
-        x, y = punto_escena_a_pdf(
-            escena.x(),
-            escena.y(),
-            rect_pagina.left(),
-            rect_pagina.top(),
-            self._visor.escala,
-        )
-        return pagina, x, y
+        return self._visor.pagina_y_punto_pt(pos)
 
     def _indice_en(
         self, palabras: tuple[PalabraTexto, ...], x: float, y: float

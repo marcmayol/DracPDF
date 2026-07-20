@@ -74,6 +74,22 @@ def test_indice_vacio_si_no_hay_outline(pdf_simple: Path) -> None:
     assert servicio.indice(doc_id) == ()
 
 
+def test_enlaces_interno_y_externo(pdf_contenido: Path) -> None:
+    servicio, doc_id = _abrir(pdf_contenido)
+
+    enlaces = servicio.enlaces(doc_id, 0)
+
+    internos = [e for e in enlaces if not e.es_externo]
+    externos = [e for e in enlaces if e.es_externo]
+    assert any(e.pagina_destino == 1 for e in internos)  # GOTO a la página 2
+    assert any(e.uri == "https://example.com/" for e in externos)
+
+
+def test_enlaces_pagina_sin_enlaces(pdf_contenido: Path) -> None:
+    servicio, doc_id = _abrir(pdf_contenido)
+    assert servicio.enlaces(doc_id, 2) == ()
+
+
 def test_palabras_en_orden_de_lectura(pdf_contenido: Path) -> None:
     servicio, doc_id = _abrir(pdf_contenido)
 

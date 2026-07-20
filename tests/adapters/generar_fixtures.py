@@ -59,7 +59,7 @@ def generar_pdf_contenido(destino: Path) -> Path:
     # Segunda pasada: los enlaces se insertan sobre una página PDF ya persistida.
     doc = fitz.open(destino)
     doc[0].insert_link(
-        {"kind": fitz.LINK_GOTO, "from": fitz.Rect(72, 160, 300, 180), "page": 2}
+        {"kind": fitz.LINK_GOTO, "from": fitz.Rect(72, 160, 300, 180), "page": 1}
     )
     doc[0].insert_link(
         {

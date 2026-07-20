@@ -32,6 +32,20 @@ class EntradaIndice:
 
 
 @dataclass(frozen=True)
+class Enlace:
+    """Un enlace de una página: su rect (puntos) y su destino. Exactamente uno de
+    `pagina_destino` (enlace interno, 0-based) o `uri` (enlace externo)."""
+
+    rect_pt: RectanguloPt
+    pagina_destino: int | None = None
+    uri: str | None = None
+
+    @property
+    def es_externo(self) -> bool:
+        return self.uri is not None
+
+
+@dataclass(frozen=True)
 class PalabraTexto:
     """Una palabra de una página con su rect (puntos) y su posición de lectura.
 

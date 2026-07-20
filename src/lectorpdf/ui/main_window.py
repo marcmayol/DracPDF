@@ -8,10 +8,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Qt
+from PySide6.QtCore import QMimeData, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QIcon,
@@ -58,6 +59,7 @@ from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.obtener_enlaces import ObtenerEnlaces
 from lectorpdf.core.use_cases.obtener_indice import ObtenerIndice
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
 from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
@@ -69,6 +71,7 @@ from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
+from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
@@ -129,6 +132,7 @@ class MainWindow(QMainWindow):
         self._buscar_contenido = BuscarEnDocumento(self._servicio_contenido)
         self._obtener_palabras = ObtenerPalabras(self._servicio_contenido)
         self._obtener_indice = ObtenerIndice(self._servicio_contenido)
+        self._obtener_enlaces = ObtenerEnlaces(self._servicio_contenido)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -148,6 +152,8 @@ class MainWindow(QMainWindow):
         self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
         self._capa_busqueda = BusquedaLayer(self._visor)
         self._capa_seleccion = SeleccionLayer(self._visor, self._obtener_palabras)
+        # Después de la selección: su filtro tiene prioridad sobre el ratón.
+        self._capa_enlaces = EnlacesLayer(self._visor, self._obtener_enlaces)
         self._barra_busqueda = BarraBusqueda()
         self._barra_busqueda.hide()
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
@@ -204,6 +210,7 @@ class MainWindow(QMainWindow):
         QShortcut(
             QKeySequence.StandardKey.FindPrevious, self, self._busqueda_anterior
         )
+        QShortcut(QKeySequence("Ctrl+G"), self, self._ir_a_pagina_dialogo)
 
     def _construir_dock_miniaturas(self) -> None:
         self._panel_lateral = QTabWidget()
@@ -297,6 +304,8 @@ class MainWindow(QMainWindow):
         self._miniaturas.eliminar_solicitado.connect(self._eliminar_pagina)
         self._miniaturas.mover_solicitado.connect(self._mover_pagina)
         self._outline.pagina_seleccionada.connect(self._visor.ir_a_pagina)
+        self._capa_enlaces.navegar_interno.connect(self._visor.ir_a_pagina)
+        self._capa_enlaces.abrir_externo.connect(self._confirmar_abrir_url)
         self._barra_busqueda.buscar.connect(self._ejecutar_busqueda)
         self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
         self._barra_busqueda.anterior.connect(self._busqueda_anterior)
@@ -309,6 +318,7 @@ class MainWindow(QMainWindow):
         self._documento = documento
         self._cerrar_busqueda()  # descarta resaltados/estado del documento previo
         self._capa_seleccion.set_documento(documento)
+        self._capa_enlaces.set_documento(documento)
         self._visor.set_documento(documento)
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
@@ -454,6 +464,7 @@ class MainWindow(QMainWindow):
         # La reorganización cambió las páginas: refrescar visor (con el zoom
         # actual, que invalida la caché de render), miniaturas y formulario.
         self._capa_seleccion.set_documento(nuevo)  # invalida el texto cacheado
+        self._capa_enlaces.set_documento(nuevo)
         self._visor.set_documento(nuevo, self._visor.escala)
         self._miniaturas.set_documento(nuevo)
         self._cargar_formulario(nuevo)
@@ -696,6 +707,30 @@ class MainWindow(QMainWindow):
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
         self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
+
+    # -- Navegación: ir a página y enlaces ----------------------------------
+
+    def _ir_a_pagina_dialogo(self) -> None:
+        if self._documento is None:
+            return
+        total = self._documento.num_paginas
+        actual = self._visor.pagina_actual() + 1
+        numero, ok = QInputDialog.getInt(
+            self, "Ir a página", "Número de página:", actual, 1, total
+        )
+        if ok:
+            self._visor.ir_a_pagina(numero - 1)
+
+    def _confirmar_abrir_url(self, uri: str) -> None:
+        """Los enlaces externos abren el navegador solo tras confirmación."""
+        respuesta = QMessageBox.question(
+            self,
+            "Abrir enlace externo",
+            f"¿Abrir este enlace en el navegador?\n\n{uri}",
+            QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Cancel,
+        )
+        if respuesta == QMessageBox.StandardButton.Open:
+            QDesktopServices.openUrl(QUrl(uri))
 
     # -- Búsqueda -----------------------------------------------------------
 

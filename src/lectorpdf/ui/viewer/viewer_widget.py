@@ -9,7 +9,7 @@ volver a desplazarse.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
-from lectorpdf.ui.forms.coordenadas import rect_pdf_a_escena
+from lectorpdf.ui.forms.coordenadas import punto_escena_a_pdf, rect_pdf_a_escena
 from lectorpdf.ui.theme.tokens import PAPEL, PAPEL_BORDE, TEMA_POR_DEFECTO
 from lectorpdf.ui.viewer.cache_lru import CacheLRU
 from lectorpdf.ui.viewer.imagen import qpixmap_desde
@@ -131,6 +131,20 @@ class ViewerWidget(QGraphicsView):
             if rect.contains(punto):
                 return indice
         return None
+
+    def pagina_y_punto_pt(self, pos: QPoint) -> tuple[int, float, float] | None:
+        """De un punto del viewport a (página, x, y) en puntos PDF, o None si el
+        punto no cae sobre ninguna página. Lo usan las capas de selección y
+        enlaces para traducir el ratón a coordenadas del documento."""
+        escena = self.mapToScene(pos)
+        pagina = self.pagina_en_punto(escena)
+        if pagina is None:
+            return None
+        rect = self._geometria[pagina]
+        x, y = punto_escena_a_pdf(
+            escena.x(), escena.y(), rect.left(), rect.top(), self._escala
+        )
+        return pagina, x, y
 
     def invalidar_pagina(self, indice: int) -> None:
         """Purga el render cacheado de una página (todas las escalas) y la

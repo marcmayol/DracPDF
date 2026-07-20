@@ -8,9 +8,12 @@ estructural, su puerto pequeño correspondiente.
 
 from __future__ import annotations
 
+import fitz
+
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.core.domain.contenido import (
     Coincidencia,
+    Enlace,
     EntradaIndice,
     PalabraTexto,
 )
@@ -73,3 +76,17 @@ class PyMuPDFContenido:
             EntradaIndice(nivel, titulo, pagina - 1 if pagina > 0 else -1)
             for nivel, titulo, pagina in doc.get_toc()
         )
+
+    def enlaces(self, documento_id: str, pagina: int) -> tuple[Enlace, ...]:
+        """Enlaces internos (LINK_GOTO -> página 0-based) y externos (LINK_URI ->
+        uri) de la página. Se ignoran otros tipos (nombrados, lanzar, remotos)."""
+        p = self._registro.obtener(documento_id)[pagina]
+        resultado: list[Enlace] = []
+        for enlace in p.get_links():
+            r = enlace["from"]
+            rect_pt = RectanguloPt(r.x0, r.y0, r.x1, r.y1)
+            if enlace["kind"] == fitz.LINK_GOTO:
+                resultado.append(Enlace(rect_pt, pagina_destino=enlace["page"]))
+            elif enlace["kind"] == fitz.LINK_URI:
+                resultado.append(Enlace(rect_pt, uri=enlace["uri"]))
+        return tuple(resultado)
