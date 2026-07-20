@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from lectorpdf.core.domain.formularios import CampoFormulario
+from lectorpdf.core.domain.formularios import CambioValor, CampoFormulario
 
 
 @runtime_checkable
@@ -35,6 +35,24 @@ class FormService(Protocol):
 
     def esta_firmado(self, documento_id: str) -> bool:
         """True si el documento contiene firmas (edición bloqueada)."""
+        ...
+
+    def puede_deshacer(self, documento_id: str) -> bool:
+        """True si hay alguna edición que deshacer en el historial."""
+        ...
+
+    def puede_rehacer(self, documento_id: str) -> bool:
+        """True si hay alguna edición deshecha que rehacer."""
+        ...
+
+    def deshacer(self, documento_id: str) -> CambioValor | None:
+        """Deshace la última edición; devuelve el campo y su valor tras deshacer,
+        o None si no había nada que deshacer."""
+        ...
+
+    def rehacer(self, documento_id: str) -> CambioValor | None:
+        """Rehace la siguiente edición deshecha; devuelve el campo y su valor, o
+        None si no había nada que rehacer."""
         ...
 
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:

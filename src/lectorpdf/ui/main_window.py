@@ -64,6 +64,7 @@ from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, Exportar
 from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
+from lectorpdf.core.use_cases.historial_formulario import HistorialFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.obtener_enlaces import ObtenerEnlaces
 from lectorpdf.core.use_cases.obtener_indice import ObtenerIndice
@@ -144,6 +145,7 @@ class MainWindow(QMainWindow):
         self._listar = ListarCampos(self._servicio_form)
         self._rellenar = RellenarCampo(self._servicio_form)
         self._guardar_form = GuardarFormulario(self._servicio_form)
+        self._historial_form = HistorialFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
@@ -378,6 +380,8 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+G"), self, self._ir_a_pagina_dialogo)
         QShortcut(QKeySequence.StandardKey.Print, self, self._imprimir)
         QShortcut(QKeySequence("F11"), self, self._conmutar_pantalla_completa)
+        QShortcut(QKeySequence.StandardKey.Undo, self, self._deshacer)
+        QShortcut(QKeySequence.StandardKey.Redo, self, self._rehacer)
 
     def _construir_dock_miniaturas(self) -> None:
         self._panel_lateral = QTabWidget()
@@ -1127,6 +1131,18 @@ class MainWindow(QMainWindow):
 
     def _cerrar_busqueda(self) -> None:
         self._vista()._cerrar_busqueda()
+
+    # -- Deshacer / rehacer en formularios ----------------------------------
+
+    def _deshacer(self) -> None:
+        doc = self._documento
+        if doc is not None and self._historial_form.deshacer(doc) is not None:
+            self._cargar_formulario(doc)  # el documento es la fuente de verdad
+
+    def _rehacer(self) -> None:
+        doc = self._documento
+        if doc is not None and self._historial_form.rehacer(doc) is not None:
+            self._cargar_formulario(doc)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # Todas las pestañas con cambios sin guardar se resuelven en un aviso.

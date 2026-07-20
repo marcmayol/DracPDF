@@ -17,6 +17,7 @@ from pathlib import Path
 
 import fitz
 
+from lectorpdf.adapters.pymupdf.historial import HistorialEdiciones
 from lectorpdf.core.domain.errores import DocumentoNoAbierto
 
 
@@ -31,6 +32,7 @@ class RegistroDocumentos:
     def __init__(self) -> None:
         self._documentos: dict[str, fitz.Document] = {}
         self._marcas: dict[str, set[Marca]] = {}
+        self._historiales: dict[str, HistorialEdiciones] = {}
 
     def registrar(self, documento: fitz.Document) -> str:
         """Registra un documento ya abierto y devuelve su id de sesión.
@@ -52,11 +54,17 @@ class RegistroDocumentos:
         return documento
 
     def cerrar(self, documento_id: str) -> None:
-        """Cierra y elimina el documento y sus marcas. Idempotente."""
+        """Cierra y elimina el documento, sus marcas y su historial. Idempotente."""
         documento = self._documentos.pop(documento_id, None)
         self._marcas.pop(documento_id, None)
+        self._historiales.pop(documento_id, None)
         if documento is not None:
             documento.close()
+
+    def historial(self, documento_id: str) -> HistorialEdiciones:
+        """Historial de ediciones del documento (deshacer/rehacer). Se crea al
+        primer uso y se descarta al cerrar o recargar."""
+        return self._historiales.setdefault(documento_id, HistorialEdiciones())
 
     # -- Operaciones a nivel de fichero -------------------------------------
 
@@ -116,6 +124,7 @@ class RegistroDocumentos:
     def _reabrir(self, documento_id: str, ruta: Path) -> None:
         nuevo = fitz.open(ruta)
         self._documentos[documento_id] = nuevo
+        self._historiales.pop(documento_id, None)  # ids de campo pueden cambiar
         self.desmarcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
         if _esta_firmado(nuevo):
             self.marcar(documento_id, Marca.FIRMADO)

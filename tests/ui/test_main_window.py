@@ -514,3 +514,34 @@ def test_abrir_desde_instancia_abre_el_documento(qapp: object, tmp_path: Path) -
         assert ventana._documento.ruta == ruta
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_deshacer_tras_editar_dos_campos_restaura_en_orden(
+    qapp: object, tmp_path: Path
+) -> None:
+    from tests.adapters.generar_fixtures_formularios import (
+        generar_formulario_dos_textos,
+    )
+
+    ventana = MainWindow()
+    try:
+        doc = ventana.abrir_ruta(generar_formulario_dos_textos(tmp_path / "dos.pdf"))
+        campos = ventana._listar.ejecutar(doc)
+        a = next(c for c in campos if c.nombre == "a")
+        b = next(c for c in campos if c.nombre == "b")
+
+        ventana._rellenar.ejecutar(doc, a, "Marc")
+        ventana._rellenar.ejecutar(doc, b, "Mayol")
+
+        def valor(campo_id: str) -> str:
+            return next(
+                c.valor for c in ventana._listar.ejecutar(doc) if c.id == campo_id
+            )
+
+        ventana._deshacer()  # deshace el segundo campo
+        assert valor(b.id) == "Y"
+        assert valor(a.id) == "Marc"
+        ventana._deshacer()  # deshace el primero
+        assert valor(a.id) == "X"
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)

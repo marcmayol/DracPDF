@@ -12,7 +12,11 @@ from lectorpdf.core.domain.firma_digital import (
     CredencialFirma,
     ResultadoVerificacion,
 )
-from lectorpdf.core.domain.formularios import CampoFormulario, RectanguloPt
+from lectorpdf.core.domain.formularios import (
+    CambioValor,
+    CampoFormulario,
+    RectanguloPt,
+)
 from lectorpdf.core.domain.herramientas import Progreso, Rango, ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 
@@ -68,6 +72,10 @@ class FakeFormService:
         self.escrituras: list[tuple[str, str, str]] = []
         self.guardados: list[tuple[str, Path | None]] = []
         self.sucio = False
+        # Historial de valores (para deshacer/rehacer).
+        self._valores: dict[str, str] = {}
+        self._ediciones: list[tuple[str, str, str]] = []  # (campo, antes, despues)
+        self._pos = 0
 
     def es_xfa(self, documento_id: str) -> bool:
         return self._es_xfa
@@ -78,6 +86,11 @@ class FakeFormService:
     def escribir_valor(self, documento_id: str, campo_id: str, valor: str) -> None:
         if all(c.id != campo_id for c in self._campos):
             raise CampoNoEncontrado(campo_id)
+        antes = self._valores.get(campo_id, "")
+        self._valores[campo_id] = valor
+        del self._ediciones[self._pos :]
+        self._ediciones.append((campo_id, antes, valor))
+        self._pos += 1
         self.escrituras.append((documento_id, campo_id, valor))
         self.sucio = True
 
@@ -86,6 +99,28 @@ class FakeFormService:
 
     def esta_firmado(self, documento_id: str) -> bool:
         return self._firmado
+
+    def puede_deshacer(self, documento_id: str) -> bool:
+        return self._pos > 0
+
+    def puede_rehacer(self, documento_id: str) -> bool:
+        return self._pos < len(self._ediciones)
+
+    def deshacer(self, documento_id: str) -> CambioValor | None:
+        if self._pos <= 0:
+            return None
+        self._pos -= 1
+        campo_id, antes, _ = self._ediciones[self._pos]
+        self._valores[campo_id] = antes
+        return CambioValor(campo_id, antes)
+
+    def rehacer(self, documento_id: str) -> CambioValor | None:
+        if self._pos >= len(self._ediciones):
+            return None
+        campo_id, _, despues = self._ediciones[self._pos]
+        self._pos += 1
+        self._valores[campo_id] = despues
+        return CambioValor(campo_id, despues)
 
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         self.guardados.append((documento_id, destino))

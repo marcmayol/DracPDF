@@ -13,6 +13,7 @@ import fitz
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoFirmado
 from lectorpdf.core.domain.formularios import (
+    CambioValor,
     CampoFormulario,
     RectanguloPt,
     TipoCampo,
@@ -56,6 +57,11 @@ class PyMuPDFFormService:
         return tuple(campos)
 
     def escribir_valor(self, documento_id: str, campo_id: str, valor: str) -> None:
+        antes = self._escribir_widget(documento_id, campo_id, valor)
+        self._registro.historial(documento_id).registrar(campo_id, antes, valor)
+
+    def _escribir_widget(self, documento_id: str, campo_id: str, valor: str) -> str:
+        """Escribe el valor y devuelve el que tenía antes (para el historial)."""
         if self._registro.tiene(documento_id, Marca.FIRMADO):
             raise DocumentoFirmado("El documento está firmado: no se puede editar")
         doc = self._registro.obtener(documento_id)
@@ -64,11 +70,33 @@ class PyMuPDFFormService:
             raise CampoNoEncontrado(campo_id)
         for i, widget in enumerate(doc[pagina].widgets()):
             if i == indice:
+                antes = _valor_texto(widget.field_value)
                 widget.field_value = valor
                 widget.update()  # regenera la apariencia del campo en el PDF
                 self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
-                return
+                return antes
         raise CampoNoEncontrado(campo_id)
+
+    def puede_deshacer(self, documento_id: str) -> bool:
+        return self._registro.historial(documento_id).puede_deshacer()
+
+    def puede_rehacer(self, documento_id: str) -> bool:
+        return self._registro.historial(documento_id).puede_rehacer()
+
+    def deshacer(self, documento_id: str) -> CambioValor | None:
+        """Deshace la última edición (reescribe el valor previo sin historiarla)."""
+        edicion = self._registro.historial(documento_id).deshacer()
+        if edicion is None:
+            return None
+        self._escribir_widget(documento_id, edicion.campo_id, edicion.antes)
+        return CambioValor(edicion.campo_id, edicion.antes)
+
+    def rehacer(self, documento_id: str) -> CambioValor | None:
+        edicion = self._registro.historial(documento_id).rehacer()
+        if edicion is None:
+            return None
+        self._escribir_widget(documento_id, edicion.campo_id, edicion.despues)
+        return CambioValor(edicion.campo_id, edicion.despues)
 
     def esta_sucio(self, documento_id: str) -> bool:
         return self._registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR)

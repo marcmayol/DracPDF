@@ -32,6 +32,21 @@ def generar_formulario_completo(destino: Path) -> Path:
     return destino
 
 
+def generar_formulario_dos_textos(destino: Path) -> Path:
+    """PDF con dos campos de texto con valor inicial ('a'='X', 'b'='Y').
+
+    Se usa para deshacer/rehacer: PyMuPDF no persiste el valor vacío en un campo
+    de texto, así que se parte de valores no vacíos para probar el orden."""
+    doc = fitz.open()
+    page = doc.new_page(width=400, height=300)
+    _texto(page, "a", (50, 50, 300, 70), valor="X")
+    _texto(page, "b", (50, 90, 300, 110), valor="Y")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    return destino
+
+
 def generar_xfa(destino: Path) -> Path:
     """PDF con una entrada /XFA en el AcroForm (sucedáneo detectable)."""
     doc = fitz.open()

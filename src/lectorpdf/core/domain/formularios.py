@@ -37,6 +37,14 @@ class RectanguloPt:
 
 
 @dataclass(frozen=True)
+class CambioValor:
+    """Campo afectado por deshacer/rehacer y el valor que queda tras la operación."""
+
+    campo_id: str
+    valor: str
+
+
+@dataclass(frozen=True)
 class CampoFormulario:
     """Un widget de formulario. `id` es de sesión: f"{pagina}:{indice_widget}"."""
 
