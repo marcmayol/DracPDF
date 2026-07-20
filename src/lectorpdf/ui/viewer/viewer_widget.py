@@ -18,8 +18,10 @@ from PySide6.QtWidgets import (
     QGraphicsView,
 )
 
+from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
+from lectorpdf.ui.forms.coordenadas import rect_pdf_a_escena
 from lectorpdf.ui.theme.tokens import PAPEL, PAPEL_BORDE, TEMA_POR_DEFECTO
 from lectorpdf.ui.viewer.cache_lru import CacheLRU
 from lectorpdf.ui.viewer.imagen import qpixmap_desde
@@ -214,6 +216,19 @@ class ViewerWidget(QGraphicsView):
             return
         indice = max(0, min(indice, max(self._geometria)))
         self.centerOn(self._geometria[indice].center())
+        self._actualizar_paginas_visibles()
+
+    def centrar_en(self, pagina: int, rect_pt: RectanguloPt) -> None:
+        """Centra la vista sobre un rect (en puntos PDF) de una página, con la
+        misma traducción página→escena que los formularios. Lo usan la búsqueda
+        (llevar la coincidencia activa a la vista) y los enlaces internos."""
+        rect_pagina = self._geometria.get(pagina)
+        if rect_pagina is None:
+            return
+        r = rect_pdf_a_escena(
+            rect_pt, rect_pagina.left(), rect_pagina.top(), self._escala
+        )
+        self.centerOn(r.x + r.ancho / 2.0, r.y + r.alto / 2.0)
         self._actualizar_paginas_visibles()
 
     def pagina_siguiente(self) -> None:

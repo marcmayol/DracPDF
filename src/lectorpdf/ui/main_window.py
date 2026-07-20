@@ -9,7 +9,15 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QIcon
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDragEnterEvent,
+    QDropEvent,
+    QIcon,
+    QKeySequence,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -22,19 +30,24 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
+from lectorpdf.adapters.pymupdf.contenido import PyMuPDFContenido
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
@@ -51,6 +64,8 @@ from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui.about_dialog import AboutDialog
+from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
+from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
@@ -88,6 +103,7 @@ class MainWindow(QMainWindow):
         self._servicio_estampado = PyMuPDFEstampadoService(self._registro)
         self._servicio_firma = PyHankoSignatureService(self._registro)
         self._servicio_herr = PyMuPDFHerramientas(self._registro)
+        self._servicio_contenido = PyMuPDFContenido(self._registro)
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -105,18 +121,28 @@ class MainWindow(QMainWindow):
         self._comprimir = ComprimirPdf(self._servicio_herr)
         self._exportar_png = ExportarImagenes(self._servicio_herr)
         self._exportar_texto = ExportarTexto(self._servicio_herr)
+        self._buscar_contenido = BuscarEnDocumento(self._servicio_contenido)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
         self._acciones_icono: list[tuple[QAction, str]] = []
+
+        # Estado de búsqueda del documento activo (se limpia al abrir/cerrar).
+        self._coincidencias: tuple[Coincidencia, ...] = ()
+        self._indice_coincidencia = -1
+        self._termino_busqueda = ""
+        self._mayus_busqueda = False
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._capa_form = FormLayer(self._visor, self._rellenar)
         self._capa_firma = SignatureLayer(self._visor, self._estampar)
         self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
+        self._capa_busqueda = BusquedaLayer(self._visor)
+        self._barra_busqueda = BarraBusqueda()
+        self._barra_busqueda.hide()
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
-        self.setCentralWidget(self._visor)
+        self.setCentralWidget(self._construir_central())
 
         self._construir_dock_miniaturas()
         self._panel_verificacion = VerificationPanel()
@@ -125,6 +151,7 @@ class MainWindow(QMainWindow):
         self._construir_barra()
         self._construir_menu()
         self._conectar_senales()
+        self._construir_atajos()
 
         self._aplicar_tema_actual()
         self.setAcceptDrops(True)
@@ -146,8 +173,28 @@ class MainWindow(QMainWindow):
         self._visor.aplicar_fondo(self._tema.canvas)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
+        self._barra_busqueda.recolorear(self._tema.text)
 
     # -- Construcción de la UI ----------------------------------------------
+
+    def _construir_central(self) -> QWidget:
+        """Apila la barra de búsqueda (oculta) sobre el visor en el área central."""
+        central = QWidget()
+        central.setObjectName("centralWidget")
+        disposicion = QVBoxLayout(central)
+        disposicion.setContentsMargins(0, 0, 0, 0)
+        disposicion.setSpacing(0)
+        disposicion.addWidget(self._barra_busqueda)
+        disposicion.addWidget(self._visor, 1)
+        return central
+
+    def _construir_atajos(self) -> None:
+        """Atajos de teclado a nivel de ventana (se ampliará en la tarea 13)."""
+        QShortcut(QKeySequence.StandardKey.Find, self, self._activar_busqueda)
+        QShortcut(QKeySequence.StandardKey.FindNext, self, self._busqueda_siguiente)
+        QShortcut(
+            QKeySequence.StandardKey.FindPrevious, self, self._busqueda_anterior
+        )
 
     def _construir_dock_miniaturas(self) -> None:
         dock = QDockWidget("Miniaturas", self)
@@ -171,6 +218,7 @@ class MainWindow(QMainWindow):
         barra.addSeparator()
         self._accion_icono(barra, "page-prev", "Página anterior", self._visor.pagina_anterior)
         self._accion_icono(barra, "page-next", "Página siguiente", self._visor.pagina_siguiente)
+        self._accion_icono(barra, "search", "Buscar (Ctrl+F)", self._activar_busqueda)
         barra.addSeparator()
         self._accion_icono(barra, "zoom-out", "Alejar", self._visor.zoom_alejar)
         self._accion_icono(barra, "zoom-in", "Acercar", self._visor.zoom_acercar)
@@ -234,12 +282,17 @@ class MainWindow(QMainWindow):
         self._miniaturas.rotar_solicitado.connect(self._rotar_pagina)
         self._miniaturas.eliminar_solicitado.connect(self._eliminar_pagina)
         self._miniaturas.mover_solicitado.connect(self._mover_pagina)
+        self._barra_busqueda.buscar.connect(self._ejecutar_busqueda)
+        self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
+        self._barra_busqueda.anterior.connect(self._busqueda_anterior)
+        self._barra_busqueda.cerrada.connect(self._cerrar_busqueda)
 
     # -- Acciones -----------------------------------------------------------
 
     def abrir_ruta(self, ruta: Path) -> Documento:
         documento = self._abrir.ejecutar(ruta)
         self._documento = documento
+        self._cerrar_busqueda()  # descarta resaltados/estado del documento previo
         self._visor.set_documento(documento)
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
@@ -618,6 +671,85 @@ class MainWindow(QMainWindow):
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
         self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
+
+    # -- Búsqueda -----------------------------------------------------------
+
+    def _activar_busqueda(self) -> None:
+        if self._documento is None:
+            return
+        self._barra_busqueda.activar(self._termino_busqueda)
+
+    def _ejecutar_busqueda(self, texto: str, coincidir_mayusculas: bool) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        if not texto:
+            self._reiniciar_busqueda()
+            self._barra_busqueda.mostrar_contador(0, 0)
+            return
+        # Mismo término y parámetros con resultados: solo avanzar, sin re-buscar.
+        if (
+            texto == self._termino_busqueda
+            and coincidir_mayusculas == self._mayus_busqueda
+            and self._coincidencias
+        ):
+            self._busqueda_siguiente()
+            return
+        res = ejecutar_con_progreso(
+            self,
+            "Buscando…",
+            lambda p: self._buscar_contenido.ejecutar(
+                doc, texto, coincidir_mayusculas, p
+            ),
+        )
+        if res.cancelado or res.error is not None:
+            return
+        coincidencias = res.resultado if isinstance(res.resultado, tuple) else ()
+        self._termino_busqueda = texto
+        self._mayus_busqueda = coincidir_mayusculas
+        self._coincidencias = coincidencias
+        self._indice_coincidencia = 0 if coincidencias else -1
+        self._capa_busqueda.set_coincidencias(coincidencias, self._indice_coincidencia)
+        self._actualizar_contador()
+        self._ir_a_coincidencia()
+
+    def _busqueda_siguiente(self) -> None:
+        self._mover_coincidencia(1)
+
+    def _busqueda_anterior(self) -> None:
+        self._mover_coincidencia(-1)
+
+    def _mover_coincidencia(self, paso: int) -> None:
+        if not self._coincidencias:
+            return
+        total = len(self._coincidencias)
+        self._indice_coincidencia = (self._indice_coincidencia + paso) % total
+        self._capa_busqueda.set_activa(self._indice_coincidencia)
+        self._actualizar_contador()
+        self._ir_a_coincidencia()
+
+    def _ir_a_coincidencia(self) -> None:
+        if not self._coincidencias or self._indice_coincidencia < 0:
+            return
+        coincidencia = self._coincidencias[self._indice_coincidencia]
+        self._visor.centrar_en(coincidencia.pagina, coincidencia.rect_pt)
+
+    def _actualizar_contador(self) -> None:
+        total = len(self._coincidencias)
+        actual = self._indice_coincidencia + 1 if total else 0
+        self._barra_busqueda.mostrar_contador(actual, total)
+
+    def _reiniciar_busqueda(self) -> None:
+        """Descarta el estado y los resaltados de búsqueda (al abrir/cerrar)."""
+        self._coincidencias = ()
+        self._indice_coincidencia = -1
+        self._termino_busqueda = ""
+        self._capa_busqueda.limpiar()
+
+    def _cerrar_busqueda(self) -> None:
+        self._barra_busqueda.hide()
+        self._reiniciar_busqueda()
+        self._visor.setFocus()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._documento is not None and self._guardar_form.hay_cambios_sin_guardar(

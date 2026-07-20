@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.adapters.certificado_prueba import generar_pkcs12
-from tests.adapters.generar_fixtures import generar_pdf_simple
+from tests.adapters.generar_fixtures import generar_pdf_contenido, generar_pdf_simple
 from tests.adapters.generar_fixtures_formularios import (
     generar_formulario_completo,
     generar_xfa,
@@ -18,6 +18,12 @@ from tests.adapters.generar_fixtures_formularios import (
 def pdf_simple(tmp_path: Path) -> Path:
     """Ruta a un PDF de 3 páginas generado al vuelo en un directorio temporal."""
     return generar_pdf_simple(tmp_path / "simple.pdf")
+
+
+@pytest.fixture
+def pdf_contenido(tmp_path: Path) -> Path:
+    """PDF con índice, enlaces, texto buscable y metadatos (Fase 8)."""
+    return generar_pdf_contenido(tmp_path / "contenido.pdf")
 
 
 @pytest.fixture

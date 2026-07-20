@@ -33,9 +33,52 @@ def generar_pdf_simple(destino: Path) -> Path:
     return destino
 
 
+def generar_pdf_contenido(destino: Path) -> Path:
+    """PDF de 3 páginas con índice (outline), enlaces (interno + externo), texto
+    buscable y metadatos. Base de los tests de la Fase 8 (visor).
+
+    El término "Ladon" aparece 3 veces (2 en la página 1, 1 en la 2). La página 1
+    contiene la frase exacta "frase exacta seleccionable" para el test de copia.
+    """
+    doc = fitz.open()
+    p1 = doc.new_page(width=595.0, height=842.0)
+    p1.insert_text((72, 72), "Ladon custodia el jardin. Ladon vigila.", fontsize=18)
+    p1.insert_text((72, 120), "frase exacta seleccionable", fontsize=18)
+    p2 = doc.new_page(width=595.0, height=842.0)
+    p2.insert_text((72, 72), "Segunda pagina: Ladon aparece aqui.", fontsize=18)
+    doc.new_page(width=595.0, height=842.0).insert_text(
+        (72, 72), "Tercera y ultima pagina.", fontsize=18
+    )
+    doc.set_toc(
+        [[1, "Portada", 1], [2, "Introduccion", 1], [1, "Desarrollo", 2], [1, "Cierre", 3]]
+    )
+    doc.set_metadata({"title": "Documento Ladon", "author": "Marc Mayol"})
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    # Segunda pasada: los enlaces se insertan sobre una página PDF ya persistida.
+    doc = fitz.open(destino)
+    doc[0].insert_link(
+        {"kind": fitz.LINK_GOTO, "from": fitz.Rect(72, 160, 300, 180), "page": 2}
+    )
+    doc[0].insert_link(
+        {
+            "kind": fitz.LINK_URI,
+            "from": fitz.Rect(72, 200, 300, 220),
+            "uri": "https://example.com/",
+        }
+    )
+    doc.save(str(destino), incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+    doc.close()
+    return destino
+
+
 def generar_todos(directorio: Path = DIRECTORIO_FIXTURES) -> dict[str, Path]:
     directorio.mkdir(parents=True, exist_ok=True)
-    return {"simple": generar_pdf_simple(directorio / "simple.pdf")}
+    return {
+        "simple": generar_pdf_simple(directorio / "simple.pdf"),
+        "contenido": generar_pdf_contenido(directorio / "contenido.pdf"),
+    }
 
 
 if __name__ == "__main__":

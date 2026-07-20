@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoNoAbierto
 from lectorpdf.core.domain.firma_digital import (
     ConfigFirma,
@@ -206,3 +207,23 @@ class FakeServicioHerramientas:
 
     def exportar_texto(self, documento_id: str, destino: Path) -> None:
         self.exportaciones_texto.append((documento_id, destino))
+
+
+class FakeServicioBusqueda:
+    """Fake en memoria de `ServicioBusqueda`. Registra las llamadas."""
+
+    def __init__(self, coincidencias: tuple[Coincidencia, ...] = ()) -> None:
+        self._coincidencias = coincidencias
+        self.llamadas: list[tuple[str, str, bool]] = []
+
+    def buscar(
+        self,
+        documento_id: str,
+        termino: str,
+        coincidir_mayusculas: bool = False,
+        progreso: Progreso | None = None,
+    ) -> tuple[Coincidencia, ...]:
+        if progreso is not None:
+            progreso(1, 1)
+        self.llamadas.append((documento_id, termino, coincidir_mayusculas))
+        return self._coincidencias

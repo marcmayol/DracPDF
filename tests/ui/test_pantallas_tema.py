@@ -38,7 +38,8 @@ def test_vista_principal_arranca_con_el_tema(qapp: object, tema: tokens.Tema) ->
     ventana.resize(1000, 700)
     ventana.show()
 
-    assert ventana.centralWidget() is ventana._visor
+    # El visor vive dentro del contenedor central (bajo la barra de búsqueda).
+    assert ventana._visor.parentWidget() is ventana.centralWidget()
     assert ventana._tema is tema
     assert tema.bg in _app().styleSheet()
     assert ventana._visor.backgroundBrush().color().name() == tema.canvas.lower()

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QLineEdit, QMessageBox
 
 from lectorpdf.ui import main_window as mw
 from lectorpdf.ui.main_window import MainWindow, _ruta_pdf_de
+from tests.adapters.generar_fixtures import generar_pdf_contenido
 from tests.adapters.generar_fixtures_formularios import (
     generar_formulario_completo,
     generar_xfa,
@@ -103,6 +104,41 @@ def test_abrir_ruta_con_aviso_devuelve_true_con_pdf_valido(
 
     assert ok is True
     assert ventana._visor.documento is not None
+
+
+# -- Búsqueda (Fase 8) ------------------------------------------------------
+
+
+def test_buscar_encuentra_navega_y_resalta(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+
+    ventana._ejecutar_busqueda("Ladon", False)
+
+    assert len(ventana._coincidencias) == 3
+    assert ventana._indice_coincidencia == 0
+    assert len(ventana._capa_busqueda.items()) == 3
+
+    # F3 avanza cíclicamente y actualiza el contador.
+    ventana._busqueda_siguiente()
+    assert ventana._indice_coincidencia == 1
+    ventana._busqueda_anterior()
+    ventana._busqueda_anterior()
+    assert ventana._indice_coincidencia == 2  # da la vuelta (0 -> 2)
+
+
+def test_cerrar_busqueda_limpia_estado_y_resaltados(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+    ventana._ejecutar_busqueda("Ladon", False)
+
+    ventana._cerrar_busqueda()
+
+    assert ventana._coincidencias == ()
+    assert ventana._capa_busqueda.items() == []
+    assert ventana._barra_busqueda.isHidden()
 
 
 # -- Formularios ------------------------------------------------------------
