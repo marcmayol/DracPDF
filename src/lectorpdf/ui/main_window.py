@@ -9,7 +9,7 @@ import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QSettings, Qt, QUrl
+from PySide6.QtCore import QMimeData, QPoint, QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -290,6 +290,10 @@ class MainWindow(QMainWindow):
         vista.aplicar_fondo(self._tema.canvas)
         vista.visor.set_doble_pagina(self._accion_doble.isChecked())
         vista.visor.set_modo_ajuste(str(self._prefs.value(_CLAVE_MODO_AJUSTE, "LIBRE")))
+        vista.visor.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        vista.visor.customContextMenuRequested.connect(
+            lambda pos, v=vista: self._menu_contextual_pagina(v, pos)
+        )
         vista.pagina_cambiada.connect(self._al_cambiar_pagina)
         vista.modo_ajuste_cambiado.connect(self._guardar_modo_ajuste)
         vista.abrir_externo.connect(self._confirmar_abrir_url)
@@ -330,6 +334,33 @@ class MainWindow(QMainWindow):
             if doc is not None and _resolver(doc.ruta) == objetivo:
                 return i
         return None
+
+    def _cerrar_pestana_actual(self) -> None:
+        self._cerrar_pestana(self._pestanas.currentIndex())
+
+    def _menu_contextual_pagina(self, vista: VistaDocumento, pos: QPoint) -> None:
+        menu = self._construir_menu_contextual(vista)
+        viewport = vista.visor.viewport()
+        if viewport is not None:
+            menu.exec(viewport.mapToGlobal(pos))
+
+    def _construir_menu_contextual(self, vista: VistaDocumento) -> QMenu:
+        """Menú contextual de la página. Aislado para poder testearlo sin exec."""
+        menu = QMenu(self)
+        copiar = menu.addAction("Copiar")
+        copiar.setEnabled(bool(vista.capa_seleccion.texto_seleccionado()))
+        copiar.triggered.connect(vista.capa_seleccion.copiar)
+        menu.addSeparator()
+        menu.addAction("Buscar…").triggered.connect(self._activar_busqueda)
+        menu.addAction("Ir a página…").triggered.connect(self._ir_a_pagina_dialogo)
+        menu.addSeparator()
+        menu.addAction("Ajustar ancho").triggered.connect(self._ajustar_ancho)
+        menu.addAction("Ajustar página").triggered.connect(self._ajustar_pagina)
+        menu.addAction("Rotar vista").triggered.connect(self._rotar_vista)
+        menu.addSeparator()
+        menu.addAction("Imprimir…").triggered.connect(self._imprimir)
+        menu.addAction("Propiedades…").triggered.connect(self._mostrar_propiedades)
+        return menu
 
     def _cerrar_pestana(self, indice: int) -> None:
         vista = self._pestanas.widget(indice)
@@ -385,6 +416,10 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("F11"), self, self._conmutar_pantalla_completa)
         QShortcut(QKeySequence.StandardKey.Undo, self, self._deshacer)
         QShortcut(QKeySequence.StandardKey.Redo, self, self._rehacer)
+        QShortcut(QKeySequence.StandardKey.ZoomIn, self, self._zoom_acercar)
+        QShortcut(QKeySequence.StandardKey.ZoomOut, self, self._zoom_alejar)
+        QShortcut(QKeySequence("Ctrl+0"), self, self._ajustar_pagina)
+        QShortcut(QKeySequence.StandardKey.Close, self, self._cerrar_pestana_actual)
 
     def _construir_dock_miniaturas(self) -> None:
         self._panel_lateral = QTabWidget()

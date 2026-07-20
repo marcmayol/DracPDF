@@ -545,3 +545,44 @@ def test_deshacer_tras_editar_dos_campos_restaura_en_orden(
         assert valor(a.id) == "X"
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+# -- Menú contextual y atajos (Fase 8, tarea 13) ----------------------------
+
+
+def test_menu_contextual_tiene_las_acciones(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        menu = ventana._construir_menu_contextual(ventana._vista())
+        textos = [a.text() for a in menu.actions() if a.text()]
+        assert "Copiar" in textos
+        assert "Ir a página…" in textos
+        assert "Propiedades…" in textos
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_copiar_del_menu_deshabilitado_sin_seleccion(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        menu = ventana._construir_menu_contextual(ventana._vista())
+        copiar = next(a for a in menu.actions() if a.text() == "Copiar")
+        assert copiar.isEnabled() is False  # no hay texto seleccionado
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_cerrar_pestana_actual_deja_una_vacia(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        ventana._cerrar_pestana_actual()
+        # Se cierra la única pestaña; queda una vacía (siempre >= 1).
+        assert ventana._pestanas.count() == 1
+        assert ventana._documento is None
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
