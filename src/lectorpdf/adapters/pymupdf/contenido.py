@@ -16,6 +16,7 @@ from lectorpdf.core.domain.contenido import (
     Enlace,
     EntradaIndice,
     PalabraTexto,
+    PropiedadesDocumento,
 )
 from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import Progreso
@@ -90,3 +91,21 @@ class PyMuPDFContenido:
             elif enlace["kind"] == fitz.LINK_URI:
                 resultado.append(Enlace(rect_pt, uri=enlace["uri"]))
         return tuple(resultado)
+
+    def propiedades(self, documento_id: str) -> PropiedadesDocumento:
+        doc = self._registro.obtener(documento_id)
+        meta = doc.metadata or {}
+        ruta = self._registro.ruta(documento_id)
+        tamano = ruta.stat().st_size if ruta.exists() else 0
+        return PropiedadesDocumento(
+            titulo=str(meta.get("title") or ""),
+            autor=str(meta.get("author") or ""),
+            asunto=str(meta.get("subject") or ""),
+            palabras_clave=str(meta.get("keywords") or ""),
+            creador=str(meta.get("creator") or ""),
+            productor=str(meta.get("producer") or ""),
+            version_pdf=str(meta.get("format") or ""),
+            cifrado=bool(doc.is_encrypted or doc.needs_pass),
+            num_paginas=doc.page_count,
+            tamano_bytes=tamano,
+        )

@@ -69,6 +69,7 @@ from lectorpdf.core.use_cases.listar_campos import ListarCampos
 from lectorpdf.core.use_cases.obtener_enlaces import ObtenerEnlaces
 from lectorpdf.core.use_cases.obtener_indice import ObtenerIndice
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
+from lectorpdf.core.use_cases.obtener_propiedades import ObtenerPropiedades
 from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
 from lectorpdf.core.use_cases.proteger_pdf import ProtegerPdf
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
@@ -86,6 +87,7 @@ from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
 from lectorpdf.ui.impresion.impresion import imprimir_documento
 from lectorpdf.ui.outline.outline_panel import OutlinePanel
+from lectorpdf.ui.propiedades_dialog import PropiedadesDialog
 from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
@@ -161,6 +163,7 @@ class MainWindow(QMainWindow):
         self._obtener_palabras = ObtenerPalabras(self._servicio_contenido)
         self._obtener_indice = ObtenerIndice(self._servicio_contenido)
         self._obtener_enlaces = ObtenerEnlaces(self._servicio_contenido)
+        self._obtener_propiedades = ObtenerPropiedades(self._servicio_contenido)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(_ORG, _APP)
@@ -463,6 +466,8 @@ class MainWindow(QMainWindow):
         self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
         self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
         menu.addSeparator()
+        self._accion_menu(menu, "Propiedades…", self._mostrar_propiedades)
+        menu.addSeparator()
         accion_sesion = QAction("Restaurar sesión al arrancar", self)
         accion_sesion.setCheckable(True)
         accion_sesion.setChecked(
@@ -654,6 +659,13 @@ class MainWindow(QMainWindow):
         doc = self._documento
         firmado = doc is not None and self._guardar_form.esta_firmado(doc)
         self._banda_firmado.setVisible(firmado)
+
+    def _mostrar_propiedades(self) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        propiedades = self._obtener_propiedades.ejecutar(doc)
+        PropiedadesDialog(propiedades, doc.ruta, self).exec()
 
     def _cargar_formulario(self, documento: Documento) -> None:
         """Lista los campos y los pasa al overlay; avisa si el PDF es XFA."""

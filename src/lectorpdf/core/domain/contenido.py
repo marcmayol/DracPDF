@@ -32,6 +32,22 @@ class EntradaIndice:
 
 
 @dataclass(frozen=True)
+class PropiedadesDocumento:
+    """Metadatos y datos técnicos del documento (solo lectura, informativos)."""
+
+    titulo: str
+    autor: str
+    asunto: str
+    palabras_clave: str
+    creador: str
+    productor: str
+    version_pdf: str
+    cifrado: bool
+    num_paginas: int
+    tamano_bytes: int
+
+
+@dataclass(frozen=True)
 class Enlace:
     """Un enlace de una página: su rect (puntos) y su destino. Exactamente uno de
     `pagina_destino` (enlace interno, 0-based) o `uri` (enlace externo)."""

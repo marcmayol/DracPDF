@@ -90,6 +90,19 @@ def test_enlaces_pagina_sin_enlaces(pdf_contenido: Path) -> None:
     assert servicio.enlaces(doc_id, 2) == ()
 
 
+def test_propiedades_lee_metadatos_y_datos_tecnicos(pdf_contenido: Path) -> None:
+    servicio, doc_id = _abrir(pdf_contenido)
+
+    props = servicio.propiedades(doc_id)
+
+    assert props.titulo == "Documento Ladon"
+    assert props.autor == "Marc Mayol"
+    assert props.num_paginas == 3
+    assert props.version_pdf.startswith("PDF")
+    assert props.cifrado is False
+    assert props.tamano_bytes == pdf_contenido.stat().st_size
+
+
 def test_palabras_en_orden_de_lectura(pdf_contenido: Path) -> None:
     servicio, doc_id = _abrir(pdf_contenido)
 
