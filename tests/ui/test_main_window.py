@@ -141,6 +141,24 @@ def test_cerrar_busqueda_limpia_estado_y_resaltados(
     assert ventana._barra_busqueda.isHidden()
 
 
+def test_seleccionar_rango_conocido_copia_ese_texto(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    documento = ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+
+    palabras = ventana._obtener_palabras.ejecutar(documento, 0)
+    textos = [p.texto for p in palabras]
+    i = textos.index("frase")  # "frase exacta seleccionable"
+    inicio, fin = palabras[i].rect_pt, palabras[i + 2].rect_pt
+
+    capa = ventana._capa_seleccion
+    capa._iniciar_arrastre(0, (inicio.x0 + inicio.x1) / 2, (inicio.y0 + inicio.y1) / 2)
+    capa._extender_arrastre((fin.x0 + fin.x1) / 2, (fin.y0 + fin.y1) / 2)
+
+    assert capa.copiar() == "frase exacta seleccionable"
+
+
 # -- Formularios ------------------------------------------------------------
 
 

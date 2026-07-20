@@ -33,6 +33,14 @@ def rect_pdf_a_escena(
     )
 
 
+def punto_escena_a_pdf(
+    x: float, y: float, origen_x: float, origen_y: float, escala: float
+) -> tuple[float, float]:
+    """De un punto de escena a puntos PDF de una página (inversa del mapeo de
+    render). La usa la selección de texto para saber sobre qué palabra va."""
+    return (x - origen_x) / escala, (y - origen_y) / escala
+
+
 def rect_escena_a_pdf(
     rect: RectEscena, origen_x: float, origen_y: float, escala: float
 ) -> RectanguloPt:

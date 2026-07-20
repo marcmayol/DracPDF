@@ -57,6 +57,7 @@ from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
 from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
 from lectorpdf.core.use_cases.proteger_pdf import ProtegerPdf
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
@@ -69,6 +70,7 @@ from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
+from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
     directorio_por_defecto,
@@ -122,6 +124,7 @@ class MainWindow(QMainWindow):
         self._exportar_png = ExportarImagenes(self._servicio_herr)
         self._exportar_texto = ExportarTexto(self._servicio_herr)
         self._buscar_contenido = BuscarEnDocumento(self._servicio_contenido)
+        self._obtener_palabras = ObtenerPalabras(self._servicio_contenido)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -139,6 +142,7 @@ class MainWindow(QMainWindow):
         self._capa_firma = SignatureLayer(self._visor, self._estampar)
         self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
         self._capa_busqueda = BusquedaLayer(self._visor)
+        self._capa_seleccion = SeleccionLayer(self._visor, self._obtener_palabras)
         self._barra_busqueda = BarraBusqueda()
         self._barra_busqueda.hide()
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
@@ -293,6 +297,7 @@ class MainWindow(QMainWindow):
         documento = self._abrir.ejecutar(ruta)
         self._documento = documento
         self._cerrar_busqueda()  # descarta resaltados/estado del documento previo
+        self._capa_seleccion.set_documento(documento)
         self._visor.set_documento(documento)
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
@@ -430,6 +435,7 @@ class MainWindow(QMainWindow):
         self._documento = nuevo
         # La reorganización cambió las páginas: refrescar visor (con el zoom
         # actual, que invalida la caché de render), miniaturas y formulario.
+        self._capa_seleccion.set_documento(nuevo)  # invalida el texto cacheado
         self._visor.set_documento(nuevo, self._visor.escala)
         self._miniaturas.set_documento(nuevo)
         self._cargar_formulario(nuevo)

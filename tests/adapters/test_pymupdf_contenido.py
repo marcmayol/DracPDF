@@ -52,3 +52,16 @@ def test_buscar_reporta_progreso_por_pagina(pdf_contenido: Path) -> None:
     servicio.buscar(doc_id, "Ladon", progreso=lambda h, t: hechos.append((h, t)))
 
     assert hechos == [(1, 3), (2, 3), (3, 3)]  # 3 páginas
+
+
+def test_palabras_en_orden_de_lectura(pdf_contenido: Path) -> None:
+    servicio, doc_id = _abrir(pdf_contenido)
+
+    palabras = servicio.palabras(doc_id, 0)
+    textos = [p.texto for p in palabras]
+
+    # La frase de la segunda línea aparece consecutiva y en orden.
+    i = textos.index("frase")
+    assert textos[i : i + 3] == ["frase", "exacta", "seleccionable"]
+    for p in palabras:
+        assert p.rect_pt.ancho > 0 and p.rect_pt.alto > 0

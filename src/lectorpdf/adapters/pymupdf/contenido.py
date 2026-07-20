@@ -9,7 +9,7 @@ estructural, su puerto pequeño correspondiente.
 from __future__ import annotations
 
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
-from lectorpdf.core.domain.contenido import Coincidencia
+from lectorpdf.core.domain.contenido import Coincidencia, PalabraTexto
 from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import Progreso
 
@@ -44,3 +44,19 @@ class PyMuPDFContenido:
             if progreso is not None:
                 progreso(indice + 1, total)  # puede lanzar OperacionCancelada
         return tuple(resultados)
+
+    def palabras(self, documento_id: str, pagina: int) -> tuple[PalabraTexto, ...]:
+        """Palabras de la página en orden de lectura. Cada tupla de `words` es
+        (x0, y0, x1, y1, texto, bloque, linea, palabra)."""
+        p = self._registro.obtener(documento_id)[pagina]
+        return tuple(
+            PalabraTexto(
+                RectanguloPt(x0, y0, x1, y1),
+                texto,
+                bloque,
+                linea,
+            )
+            for x0, y0, x1, y1, texto, bloque, linea, _ in p.get_text(
+                "words", sort=True
+            )
+        )

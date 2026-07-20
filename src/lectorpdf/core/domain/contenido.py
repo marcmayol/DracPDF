@@ -19,3 +19,16 @@ class Coincidencia:
 
     pagina: int
     rect_pt: RectanguloPt
+
+
+@dataclass(frozen=True)
+class PalabraTexto:
+    """Una palabra de una página con su rect (puntos) y su posición de lectura.
+
+    `bloque` y `linea` permiten reconstruir los saltos de línea/párrafo al copiar
+    y delimitar la selección por palabra (doble clic) o párrafo (triple clic)."""
+
+    rect_pt: RectanguloPt
+    texto: str
+    bloque: int
+    linea: int
