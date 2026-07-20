@@ -112,6 +112,37 @@ Operaciones de manipulación de PDF integradas en un menú "Herramientas" y en e
 
 **Criterio de aceptación:** script que une (con el orden comprobado), divide, protege y reabre con contraseña, desprotege (con igualdad verificada), comprime (con la reducción reportada) y exporta a PNG y texto, con exit 0; y demostración de que las operaciones sobre un documento FIRMADO se rechazan.
 
+### Fase 8: Fundamentos de visor
+
+Fuente de verdad visual: extensión del diseño "Identidad Ladón" para menús y navegación (Claude Design; se facilitará la URL de importación al inicio). Todo componente nuevo usa sus tokens; nada de estilo Qt por defecto.
+
+#### Parte 0: estilo
+1. Importar la extensión del diseño vía MCP de claude_design, ampliar tokens.py y el QSS generado con los componentes nuevos (menús, barra de búsqueda, árbol de outline, diálogos); test de humo de ambos temas
+
+#### Parte A: navegar y usar el documento
+2. Buscar en el documento (Ctrl+F): barra según diseño, búsqueda con search_for por página, resaltado de resultados sobre el render (resultado activo destacado vs. resto), contador "n de m", navegación F3/Shift+F3, coincidir mayúsculas; la búsqueda en documentos grandes no bloquea la UI (worker de la Fase 6)
+3. Seleccionar y copiar texto: selección por arrastre sobre los rects de texto de fitz, resaltado visual, Ctrl+C al portapapeles; doble clic selecciona palabra, triple clic párrafo
+4. Índice del documento: panel con get_toc() como árbol (pestaña junto a miniaturas, según diseño), clic navega, se oculta si el PDF no trae outline
+5. Ir a página (Ctrl+G) con diálogo según diseño, y enlaces del PDF clicables: internos navegan, externos abren en el navegador tras confirmación
+6. Imprimir (Ctrl+P): QPrintDialog + render a la resolución de la impresora, con rango de páginas; vista previa si QPrintPreviewDialog encaja con el tema sin pelearse
+7. Modos de vista persistentes: ajuste a ancho/página, doble página, pantalla completa (F11), rotación de vista (no modifica el fichero)
+
+#### Parte B: básicos de aplicación
+8. Menú Archivo completo: abrir recientes (QSettings, rutas elididas según diseño, limpiar lista), guardar como/guardar copia (esta última es también la salida ofrecida por el aviso de documento firmado)
+9. Restaurar estado: última página y zoom por documento (QSettings, clave por ruta), y opción de reabrir los documentos de la sesión anterior
+10. Instancia única: QLocalServer/QLocalSocket; abrir un PDF desde el explorador con la app ya abierta lo carga en la instancia existente y trae la ventana al frente
+11. Deshacer/rehacer en formularios (Ctrl+Z/Ctrl+Y): historial de valores por documento; deshacer restaura el valor anterior en el doc y en el widget visible
+12. Propiedades del documento (diálogo según diseño): metadatos, versión PDF, cifrado, nº de páginas, tamaño de fichero
+13. Repaso de atajos y menú contextual de página (según diseño) con las acciones aplicables
+
+#### Reglas propias de esta fase
+- Buscar/seleccionar operan sobre coordenadas de fitz transformadas con el mismo mapeo página→escena de los formularios: reutilizar, no duplicar
+- El historial de deshacer vive junto al documento en el registro y se limpia al cerrar (misma disciplina que las marcas)
+- Nada de esta fase modifica el documento salvo formularios ya existentes (deshacer incluido); la rotación de vista y los modos son presentación pura
+- La instancia única no debe romper el flujo de tests (activable por flag, desactivada en tests)
+
+**Criterio de aceptación:** con un PDF de fixture con outline, enlaces y texto: la búsqueda de un término reporta las ocurrencias correctas y navega entre ellas; la selección de un rango conocido copia exactamente ese texto; el outline del panel coincide con get_toc(); imprimir a un QPrinter de PDF virtual produce el nº de páginas del rango pedido; recientes, última página y zoom persisten tras cerrar y reabrir; una segunda invocación de la app con otro PDF llega a la instancia existente; y deshacer tras editar dos campos restaura los valores en orden. Demostrado por script/tests con exit 0.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
