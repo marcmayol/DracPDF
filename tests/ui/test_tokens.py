@@ -55,3 +55,16 @@ def test_tema_por_nombre_cae_al_por_defecto_si_no_existe() -> None:
 def test_rgba_deriva_del_hex() -> None:
     assert tokens.rgba("#E0534A", 0.30) == "rgba(224, 83, 74, 0.3)"
     assert tokens.rgba("#FFFFFF", 1.0) == "rgba(255, 255, 255, 1.0)"
+
+
+def test_colores_de_escena_de_busqueda_y_seleccion() -> None:
+    for color in (
+        tokens.BUSQUEDA_COINCIDENCIA,
+        tokens.BUSQUEDA_ACTIVA,
+        tokens.SELECCION_TEXTO,
+    ):
+        assert _HEX.match(color.hex)
+        assert 0 <= color.alfa <= 255
+    assert _HEX.match(tokens.BUSQUEDA_ACTIVA_BORDE)
+    # El activo es más opaco que el resto de coincidencias.
+    assert tokens.BUSQUEDA_ACTIVA.alfa > tokens.BUSQUEDA_COINCIDENCIA.alfa

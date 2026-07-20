@@ -60,6 +60,22 @@ def test_aplicar_tema_pone_el_stylesheet(qapp: object) -> None:
     aplicar_tema(app, tokens.TEMA_OSCURO)  # restaurar
 
 
+def test_qss_incluye_los_componentes_nuevos_de_fase_8() -> None:
+    qss = generar_qss(tokens.TEMA_OSCURO)
+    assert "min-height: 28px" in qss  # QMenuBar
+    assert "QTabBar::tab" in qss  # pestañas Miniaturas | Índice
+    assert "QTreeView::item" in qss  # árbol de outline
+    assert "QFrame[infoBanner=" in qss  # banda documento firmado
+
+
+def test_banner_deriva_del_token_sig_unknown_por_tema() -> None:
+    oscuro = generar_qss(tokens.TEMA_OSCURO)
+    claro = generar_qss(tokens.TEMA_CLARO)
+    assert tokens.rgba(tokens.TEMA_OSCURO.sig_unknown, 0.35) in oscuro
+    assert tokens.rgba(tokens.TEMA_CLARO.sig_unknown, 0.35) in claro
+    assert tokens.TEMA_OSCURO.sig_unknown in oscuro  # banner-text
+
+
 def test_persistencia_del_tema(qapp: object) -> None:
     guardar_preferencia_tema("claro")
     assert cargar_tema_preferido() is tokens.TEMA_CLARO

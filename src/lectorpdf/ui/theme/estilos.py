@@ -120,6 +120,35 @@ QFrame[sigCard="true"] {
 QFrame[sigCard="true"][sigState="valid"]   { border-left: 3px solid $sig_valid; }
 QFrame[sigCard="true"][sigState="invalid"] { border-left: 3px solid $sig_invalid; }
 QFrame[sigCard="true"][sigState="unknown"] { border-left: 3px solid $sig_unknown; }
+
+/* Ampliación (Fase 8): barra de menús, pestañas, árbol de outline, banda. */
+QMenuBar { min-height: 28px; }
+QMenu { min-width: 240px; }
+QMenu::item:disabled { color: $text_muted; }
+QMenu::indicator { width: 14px; height: 14px; margin-left: 6px; }
+QTabBar { background: transparent; }
+QTabBar::tab {
+    background: transparent; color: $text_muted; padding: 7px 14px;
+    border: none; border-bottom: 2px solid transparent; font-size: ${tam_meta}px;
+}
+QTabBar::tab:selected { color: $text; border-bottom: 2px solid $accent; }
+QTabBar::tab:hover:!selected { color: $text; }
+QTreeView::item { height: 24px; border-radius: ${r_control}px; padding: 0 4px; }
+QTreeView::item:hover { background: $surface_2; }
+QTreeView::item:selected { background: $accent_30; color: $text; }
+QTreeView::branch { background: transparent; }
+/* Banda no modal "documento firmado" (propiedad infoBanner) */
+QFrame[infoBanner="true"] {
+    background: $banner_bg; border: none;
+    border-bottom: 1px solid $banner_borde; min-height: 32px; max-height: 32px;
+}
+QFrame[infoBanner="true"] QLabel {
+    color: $banner_text; font-size: ${tam_meta}px; background: transparent;
+}
+QFrame[infoBanner="true"] QPushButton {
+    background: transparent; border: 1px solid $banner_borde;
+    color: $banner_text; padding: 2px 10px; border-radius: ${r_control}px;
+}
 """
 )
 
@@ -150,6 +179,10 @@ def generar_qss(tema: Tema) -> str:
         tam_meta=TIPOGRAFIA.tam_meta,
         r_control=RADIOS.control,
         r_panel=RADIOS.panel,
+        # Banda "documento firmado": ámbar derivado del token sig_unknown del tema.
+        banner_bg=rgba(tema.sig_unknown, 0.10),
+        banner_borde=rgba(tema.sig_unknown, 0.35),
+        banner_text=tema.sig_unknown,
     )
 
 

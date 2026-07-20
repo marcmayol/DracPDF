@@ -73,6 +73,22 @@ TINTA_FIRMA = "#111318"
 OVERLAY_FIRMA = "#E0534A"
 
 
+@dataclass(frozen=True)
+class ColorEscena:
+    """Color que se pinta sobre el render en la escena (hex + alfa 0..255)."""
+
+    hex: str
+    alfa: int
+
+
+# Colores de escena de búsqueda y selección (iguales en ambos temas; van sobre el
+# render de la página, no sobre el chrome). Del diseño "Ladón" ampliado.
+BUSQUEDA_COINCIDENCIA = ColorEscena("#D9B45C", 102)  # 40 % ámbar: resto de resultados
+BUSQUEDA_ACTIVA = ColorEscena("#E0534A", 128)  # 50 % rojo: resultado activo
+BUSQUEDA_ACTIVA_BORDE = "#A83228"  # borde opaco 1,5 px del resultado activo
+SELECCION_TEXTO = ColorEscena("#5B86BD", 102)  # 40 % azul acero: selección
+
+
 TEMA_OSCURO = Tema(
     nombre="oscuro",
     es_oscuro=True,
