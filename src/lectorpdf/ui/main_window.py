@@ -1213,6 +1213,24 @@ class MainWindow(QMainWindow):
     def _conmutar_restaurar_sesion(self, activado: bool) -> None:
         self._prefs.setValue(_CLAVE_RESTAURAR, activado)
 
+    # -- Instancia única ----------------------------------------------------
+
+    def traer_al_frente(self) -> None:
+        """Restaura y trae la ventana al frente (segunda invocación de la app).
+        En Windows a veces solo parpadea la barra de tareas; el ciclo
+        minimizar/restaurar es la mitigación habitual si ocurre."""
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def abrir_desde_instancia(self, ruta_str: str) -> None:
+        """Otra invocación pidió abrir un documento en esta instancia."""
+        if ruta_str:
+            self.abrir_ruta_con_aviso(Path(ruta_str))
+        self.traer_al_frente()
+
     # -- Arrastrar y soltar -------------------------------------------------
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:

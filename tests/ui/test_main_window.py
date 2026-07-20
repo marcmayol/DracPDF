@@ -503,3 +503,14 @@ def test_cerrar_con_cambios_guarda_si_el_usuario_lo_pide(
 
     assert ventana._guardar_form.hay_cambios_sin_guardar(documento) is False
     assert evento.isAccepted()
+
+
+def test_abrir_desde_instancia_abre_el_documento(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ruta = _pdf(tmp_path)
+        ventana.abrir_desde_instancia(str(ruta))
+        assert ventana._documento is not None
+        assert ventana._documento.ruta == ruta
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
