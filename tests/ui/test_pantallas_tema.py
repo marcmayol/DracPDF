@@ -38,8 +38,9 @@ def test_vista_principal_arranca_con_el_tema(qapp: object, tema: tokens.Tema) ->
     ventana.resize(1000, 700)
     ventana.show()
 
-    # El visor vive dentro del contenedor central (bajo la barra de búsqueda).
-    assert ventana._visor.parentWidget() is ventana.centralWidget()
+    # El área central es el QTabWidget de vistas; el visor pertenece a la ventana.
+    assert ventana.centralWidget() is ventana._pestanas
+    assert ventana._visor.window() is ventana
     assert ventana._tema is tema
     assert tema.bg in _app().styleSheet()
     assert ventana._visor.backgroundBrush().color().name() == tema.canvas.lower()

@@ -5,6 +5,7 @@ barra de herramientas.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -38,7 +39,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTabWidget,
     QToolBar,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -106,6 +106,7 @@ from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
 from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
+from lectorpdf.ui.vista_documento import VistaDocumento
 
 _TITULO_BASE = NOMBRE_APP
 _ORG = "lectorpdf"
@@ -113,10 +114,21 @@ _APP = "lectorpdf"
 _CLAVE_DOBLE = "vista/doble_pagina"
 _CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
 _CLAVE_RECIENTES = "archivo/recientes"
+_CLAVE_SESION = "sesion/documentos"
+_CLAVE_SESION_ACTIVA = "sesion/activa"
+_CLAVE_RESTAURAR = "sesion/restaurar"
+
+
+def _resolver(ruta: Path) -> Path:
+    """Ruta canónica para comparar documentos (misma ruta = mismo documento)."""
+    try:
+        return ruta.resolve()
+    except OSError:
+        return ruta
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, *, restaurar_sesion: bool = False) -> None:
         super().__init__()
         # Raíz de composición: un registro compartido para todos los adaptadores.
         self._registro = RegistroDocumentos()
@@ -148,33 +160,14 @@ class MainWindow(QMainWindow):
         self._obtener_indice = ObtenerIndice(self._servicio_contenido)
         self._obtener_enlaces = ObtenerEnlaces(self._servicio_contenido)
 
-        self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(_ORG, _APP)
         self._acciones_icono: list[tuple[QAction, str]] = []
 
-        # Estado de búsqueda del documento activo (se limpia al abrir/cerrar).
-        self._coincidencias: tuple[Coincidencia, ...] = ()
-        self._indice_coincidencia = -1
-        self._termino_busqueda = ""
-        self._mayus_busqueda = False
-
-        self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._outline = OutlinePanel()
-        self._capa_form = FormLayer(self._visor, self._rellenar)
-        self._capa_firma = SignatureLayer(self._visor, self._estampar)
-        self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
-        self._capa_busqueda = BusquedaLayer(self._visor)
-        self._capa_seleccion = SeleccionLayer(self._visor, self._obtener_palabras)
-        # Después de la selección: su filtro tiene prioridad sobre el ratón.
-        self._capa_enlaces = EnlacesLayer(self._visor, self._obtener_enlaces)
-        self._barra_busqueda = BarraBusqueda()
-        self._barra_busqueda.hide()
-        self._banda_firmado = BandaFirmado()
-        self._banda_firmado.hide()
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
-        self.setCentralWidget(self._construir_central())
+        self.setCentralWidget(self._construir_central())  # QTabWidget de vistas
 
         self._construir_dock_miniaturas()
         self._panel_verificacion = VerificationPanel()
@@ -185,12 +178,15 @@ class MainWindow(QMainWindow):
         self._conectar_senales()
         self._construir_atajos()
 
+        self._nueva_pestana_vacia()  # siempre hay al menos una pestaña
         self._aplicar_tema_actual()
         self._restaurar_modos_de_vista()
         self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
         self._aplicar_icono_ventana()
         self.resize(1100, 1000)
+        if restaurar_sesion:
+            self._restaurar_sesion()
 
     def _aplicar_icono_ventana(self) -> None:
         ruta = ruta_icono_app()
@@ -203,24 +199,174 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if isinstance(app, QApplication):
             aplicar_tema(app, self._tema)
-        self._visor.aplicar_fondo(self._tema.canvas)
+        for vista in self._vistas():
+            vista.aplicar_fondo(self._tema.canvas)
+            vista.recolorear(self._tema.text)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
-        self._barra_busqueda.recolorear(self._tema.text)
+
+    # -- Proxies a la vista (pestaña) activa --------------------------------
+
+    @property
+    def _documento(self) -> Documento | None:
+        return self._vista().documento
+
+    @property
+    def _visor(self) -> ViewerWidget:
+        return self._vista().visor
+
+    @property
+    def _capa_form(self) -> FormLayer:
+        return self._vista().capa_form
+
+    @property
+    def _capa_firma(self) -> SignatureLayer:
+        return self._vista().capa_firma
+
+    @property
+    def _capa_sello(self) -> DigitalSealLayer:
+        return self._vista().capa_sello
+
+    @property
+    def _capa_busqueda(self) -> BusquedaLayer:
+        return self._vista().capa_busqueda
+
+    @property
+    def _capa_seleccion(self) -> SeleccionLayer:
+        return self._vista().capa_seleccion
+
+    @property
+    def _capa_enlaces(self) -> EnlacesLayer:
+        return self._vista().capa_enlaces
+
+    @property
+    def _barra_busqueda(self) -> BarraBusqueda:
+        return self._vista().barra_busqueda
+
+    @property
+    def _banda_firmado(self) -> BandaFirmado:
+        return self._vista().banda_firmado
+
+    @property
+    def _coincidencias(self) -> tuple[Coincidencia, ...]:
+        return self._vista()._coincidencias
+
+    @property
+    def _indice_coincidencia(self) -> int:
+        return self._vista()._indice_coincidencia
 
     # -- Construcción de la UI ----------------------------------------------
 
     def _construir_central(self) -> QWidget:
-        """Apila la barra de búsqueda (oculta) sobre el visor en el área central."""
-        central = QWidget()
-        central.setObjectName("centralWidget")
-        disposicion = QVBoxLayout(central)
-        disposicion.setContentsMargins(0, 0, 0, 0)
-        disposicion.setSpacing(0)
-        disposicion.addWidget(self._banda_firmado)
-        disposicion.addWidget(self._barra_busqueda)
-        disposicion.addWidget(self._visor, 1)
-        return central
+        """El área central es un QTabWidget: una VistaDocumento por pestaña."""
+        self._pestanas = QTabWidget()
+        self._pestanas.setObjectName("centralWidget")
+        self._pestanas.setDocumentMode(True)
+        self._pestanas.setTabsClosable(True)
+        self._pestanas.setMovable(True)
+        self._pestanas.tabCloseRequested.connect(self._cerrar_pestana)
+        self._pestanas.currentChanged.connect(self._al_cambiar_pestana)
+        return self._pestanas
+
+    # -- Gestión de pestañas (multi-documento) ------------------------------
+
+    def _nueva_vista(self) -> VistaDocumento:
+        """Crea una VistaDocumento cableada y heredando los modos de vista."""
+        vista = VistaDocumento(
+            render=self._renderizar,
+            rellenar=self._rellenar,
+            estampar=self._estampar,
+            firmar_digital=self._firmar_digital,
+            buscar=self._buscar_contenido,
+            palabras=self._obtener_palabras,
+            enlaces=self._obtener_enlaces,
+        )
+        vista.recolorear(self._tema.text)
+        vista.aplicar_fondo(self._tema.canvas)
+        vista.visor.set_doble_pagina(self._accion_doble.isChecked())
+        vista.visor.set_modo_ajuste(str(self._prefs.value(_CLAVE_MODO_AJUSTE, "LIBRE")))
+        vista.pagina_cambiada.connect(self._al_cambiar_pagina)
+        vista.modo_ajuste_cambiado.connect(self._guardar_modo_ajuste)
+        vista.abrir_externo.connect(self._confirmar_abrir_url)
+        vista.copia_solicitada.connect(self._guardar_copia)
+        return vista
+
+    def _nueva_pestana_vacia(self) -> VistaDocumento:
+        vista = self._nueva_vista()
+        indice = self._pestanas.addTab(vista, "Sin documento")
+        self._pestanas.setCurrentIndex(indice)
+        return vista
+
+    def _vista(self) -> VistaDocumento:
+        """Vista de la pestaña activa (siempre hay al menos una)."""
+        widget = self._pestanas.currentWidget()
+        assert isinstance(widget, VistaDocumento)
+        return widget
+
+    def _vistas(self) -> list[VistaDocumento]:
+        vistas = []
+        for i in range(self._pestanas.count()):
+            widget = self._pestanas.widget(i)
+            if isinstance(widget, VistaDocumento):
+                vistas.append(widget)
+        return vistas
+
+    def _vista_para_cargar(self) -> VistaDocumento:
+        """La pestaña activa si está vacía; si no, una pestaña nueva."""
+        actual = self._vista()
+        if actual.documento is None:
+            return actual
+        return self._nueva_pestana_vacia()
+
+    def _indice_pestana_por_ruta(self, ruta: Path) -> int | None:
+        objetivo = _resolver(ruta)
+        for i, vista in enumerate(self._vistas()):
+            doc = vista.documento
+            if doc is not None and _resolver(doc.ruta) == objetivo:
+                return i
+        return None
+
+    def _cerrar_pestana(self, indice: int) -> None:
+        vista = self._pestanas.widget(indice)
+        if not isinstance(vista, VistaDocumento):
+            return
+        doc = vista.documento
+        if doc is not None and not self._confirmar_cierre_documento(vista):
+            return
+        if doc is not None:
+            self._guardar_estado_documento(doc, vista)
+            self._registro.cerrar(doc.id)
+        self._pestanas.removeTab(indice)
+        vista.deleteLater()
+        if self._pestanas.count() == 0:
+            self._nueva_pestana_vacia()
+
+    def _al_cambiar_pestana(self, _indice: int) -> None:
+        """Sincroniza los paneles compartidos con la pestaña activa."""
+        if self._pestanas.count() == 0:
+            return
+        vista = self._vista()
+        doc = vista.documento
+        if doc is None:
+            self._miniaturas.limpiar()
+            self._outline.set_entradas(())
+            self._panel_lateral.setTabVisible(self._idx_tab_indice, False)
+            self.setWindowTitle(_TITULO_BASE)
+            self._etiqueta_pagina.setText("—")
+            return
+        self._miniaturas.set_documento(doc)
+        self._miniaturas.seleccionar_pagina(vista.visor.pagina_actual())
+        self._cargar_indice(doc)
+        self._actualizar_banda_firmado()
+        self.setWindowTitle(f"{doc.titulo or doc.ruta.name} — {_TITULO_BASE}")
+        self._actualizar_etiqueta(vista.visor.pagina_actual())
+
+    def _al_cambiar_pagina(self, indice: int) -> None:
+        """Cambió la página en alguna vista; refleja solo si es la activa."""
+        if self.sender() is not self._vista():
+            return
+        self._miniaturas.seleccionar_pagina(indice)
+        self._actualizar_etiqueta(indice)
 
     def _construir_atajos(self) -> None:
         """Atajos de teclado a nivel de ventana (se ampliará en la tarea 13)."""
@@ -258,19 +404,19 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "open", "Abrir…", self._abrir_por_dialogo)
         self._accion_icono(barra, "save", "Guardar", self._guardar)
         barra.addSeparator()
-        self._accion_icono(barra, "page-prev", "Página anterior", self._visor.pagina_anterior)
-        self._accion_icono(barra, "page-next", "Página siguiente", self._visor.pagina_siguiente)
+        self._accion_icono(barra, "page-prev", "Página anterior", self._pagina_anterior)
+        self._accion_icono(barra, "page-next", "Página siguiente", self._pagina_siguiente)
         self._accion_icono(barra, "search", "Buscar (Ctrl+F)", self._activar_busqueda)
         self._accion_icono(barra, "print", "Imprimir (Ctrl+P)", self._imprimir)
         barra.addSeparator()
-        self._accion_icono(barra, "zoom-out", "Alejar", self._visor.zoom_alejar)
-        self._accion_icono(barra, "zoom-in", "Acercar", self._visor.zoom_acercar)
-        self._accion_icono(barra, "fit-width", "Ajustar ancho", self._visor.ajustar_a_ancho)
-        self._accion_icono(barra, "fit-page", "Ajustar página", self._visor.ajustar_a_pagina)
+        self._accion_icono(barra, "zoom-out", "Alejar", self._zoom_alejar)
+        self._accion_icono(barra, "zoom-in", "Acercar", self._zoom_acercar)
+        self._accion_icono(barra, "fit-width", "Ajustar ancho", self._ajustar_ancho)
+        self._accion_icono(barra, "fit-page", "Ajustar página", self._ajustar_pagina)
         self._accion_doble = self._accion_conmutable(
             barra, "page-double", "Doble página", self._conmutar_doble
         )
-        self._accion_icono(barra, "rotate", "Rotar vista", lambda: self._visor.rotar_vista(90))
+        self._accion_icono(barra, "rotate", "Rotar vista", self._rotar_vista)
         self._accion_icono(
             barra, "fullscreen", "Pantalla completa (F11)", self._conmutar_pantalla_completa
         )
@@ -312,6 +458,14 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
         self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
+        menu.addSeparator()
+        accion_sesion = QAction("Restaurar sesión al arrancar", self)
+        accion_sesion.setCheckable(True)
+        accion_sesion.setChecked(
+            bool(self._prefs.value(_CLAVE_RESTAURAR, True, type=bool))
+        )
+        accion_sesion.toggled.connect(self._conmutar_restaurar_sesion)
+        menu.addAction(accion_sesion)
         menu.addSeparator()
         self._accion_menu(menu, "Salir", self.close, "Ctrl+Q")
 
@@ -363,39 +517,64 @@ class MainWindow(QMainWindow):
         return accion
 
     def _conectar_senales(self) -> None:
-        self._visor.pagina_cambiada.connect(self._miniaturas.seleccionar_pagina)
-        self._visor.pagina_cambiada.connect(self._actualizar_etiqueta)
-        self._miniaturas.pagina_seleccionada.connect(self._visor.ir_a_pagina)
+        # Solo los paneles compartidos; las señales por documento se cablean en
+        # _nueva_vista (una VistaDocumento por pestaña).
+        self._miniaturas.pagina_seleccionada.connect(self._ir_a_pagina_activa)
         self._miniaturas.rotar_solicitado.connect(self._rotar_pagina)
         self._miniaturas.eliminar_solicitado.connect(self._eliminar_pagina)
         self._miniaturas.mover_solicitado.connect(self._mover_pagina)
-        self._outline.pagina_seleccionada.connect(self._visor.ir_a_pagina)
-        self._capa_enlaces.navegar_interno.connect(self._visor.ir_a_pagina)
-        self._capa_enlaces.abrir_externo.connect(self._confirmar_abrir_url)
-        self._visor.modo_ajuste_cambiado.connect(self._guardar_modo_ajuste)
-        self._barra_busqueda.buscar.connect(self._ejecutar_busqueda)
-        self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
-        self._barra_busqueda.anterior.connect(self._busqueda_anterior)
-        self._barra_busqueda.cerrada.connect(self._cerrar_busqueda)
-        self._banda_firmado.copia_solicitada.connect(self._guardar_copia)
+        self._outline.pagina_seleccionada.connect(self._ir_a_pagina_activa)
+
+    def _ir_a_pagina_activa(self, indice: int) -> None:
+        self._visor.ir_a_pagina(indice)
+
+    # Reenvíos de la barra al visor de la pestaña activa (evaluados al pulsar).
+    def _pagina_anterior(self) -> None:
+        self._visor.pagina_anterior()
+
+    def _pagina_siguiente(self) -> None:
+        self._visor.pagina_siguiente()
+
+    def _zoom_acercar(self) -> None:
+        self._visor.zoom_acercar()
+
+    def _zoom_alejar(self) -> None:
+        self._visor.zoom_alejar()
+
+    def _ajustar_ancho(self) -> None:
+        self._visor.ajustar_a_ancho()
+
+    def _ajustar_pagina(self) -> None:
+        self._visor.ajustar_a_pagina()
+
+    def _rotar_vista(self) -> None:
+        self._visor.rotar_vista(90)
 
     # -- Acciones -----------------------------------------------------------
 
     def abrir_ruta(self, ruta: Path) -> Documento:
+        # Si el documento ya está abierto, se activa su pestaña (no se duplica).
+        indice_existente = self._indice_pestana_por_ruta(ruta)
+        if indice_existente is not None:
+            self._pestanas.setCurrentIndex(indice_existente)
+            existente = self._vista().documento
+            assert existente is not None
+            return existente
+
         documento = self._abrir.ejecutar(ruta)
-        self._documento = documento
-        self._cerrar_busqueda()  # descarta resaltados/estado del documento previo
-        self._capa_seleccion.set_documento(documento)
-        self._capa_enlaces.set_documento(documento)
-        self._visor.set_documento(documento)
+        vista = self._vista_para_cargar()
+        vista.set_documento(documento)
+        indice = self._pestanas.indexOf(vista)
+        self._pestanas.setTabText(indice, documento.titulo or ruta.name)
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
         self._cargar_indice(documento)
         self._actualizar_banda_firmado()
         self._registrar_reciente(ruta)
+        self._restaurar_estado_documento(documento, vista)
         nombre = documento.titulo or ruta.name
         self.setWindowTitle(f"{nombre} — {_TITULO_BASE}")
-        self._actualizar_etiqueta(0)
+        self._actualizar_etiqueta(vista.visor.pagina_actual())
         return documento
 
     # -- Archivo: recientes, guardar como/copia, banda de firmado -----------
@@ -605,12 +784,12 @@ class MainWindow(QMainWindow):
         except ErrorDominio as exc:
             QMessageBox.warning(self, "No se pudo organizar", str(exc))
             return
-        self._documento = nuevo
-        # La reorganización cambió las páginas: refrescar visor (con el zoom
-        # actual, que invalida la caché de render), miniaturas y formulario.
-        self._capa_seleccion.set_documento(nuevo)  # invalida el texto cacheado
-        self._capa_enlaces.set_documento(nuevo)
-        self._visor.set_documento(nuevo, self._visor.escala)
+        # La reorganización cambió las páginas: refrescar la vista activa (con el
+        # zoom actual, que invalida la caché de render), miniaturas y formulario.
+        vista = self._vista()
+        escala = vista.visor.escala
+        vista.set_documento(nuevo)
+        vista.visor.set_escala(escala)
         self._miniaturas.set_documento(nuevo)
         self._cargar_formulario(nuevo)
         self._cargar_indice(nuevo)
@@ -880,7 +1059,8 @@ class MainWindow(QMainWindow):
     # -- Modos de vista -----------------------------------------------------
 
     def _conmutar_doble(self, activado: bool) -> None:
-        self._visor.set_doble_pagina(activado)
+        for vista in self._vistas():
+            vista.visor.set_doble_pagina(activado)
         self._prefs.setValue(_CLAVE_DOBLE, activado)
 
     def _conmutar_pantalla_completa(self) -> None:
@@ -931,106 +1111,107 @@ class MainWindow(QMainWindow):
         )
         dialogo.exec()
 
-    # -- Búsqueda -----------------------------------------------------------
+    # -- Búsqueda (delega en la vista activa) -------------------------------
 
     def _activar_busqueda(self) -> None:
-        if self._documento is None:
-            return
-        self._barra_busqueda.activar(self._termino_busqueda)
+        self._vista().activar_busqueda()
 
     def _ejecutar_busqueda(self, texto: str, coincidir_mayusculas: bool) -> None:
-        doc = self._documento
-        if doc is None:
-            return
-        if not texto:
-            self._reiniciar_busqueda()
-            self._barra_busqueda.mostrar_contador(0, 0)
-            return
-        # Mismo término y parámetros con resultados: solo avanzar, sin re-buscar.
-        if (
-            texto == self._termino_busqueda
-            and coincidir_mayusculas == self._mayus_busqueda
-            and self._coincidencias
-        ):
-            self._busqueda_siguiente()
-            return
-        res = ejecutar_con_progreso(
-            self,
-            "Buscando…",
-            lambda p: self._buscar_contenido.ejecutar(
-                doc, texto, coincidir_mayusculas, p
-            ),
-        )
-        if res.cancelado or res.error is not None:
-            return
-        coincidencias = res.resultado if isinstance(res.resultado, tuple) else ()
-        self._termino_busqueda = texto
-        self._mayus_busqueda = coincidir_mayusculas
-        self._coincidencias = coincidencias
-        self._indice_coincidencia = 0 if coincidencias else -1
-        self._capa_busqueda.set_coincidencias(coincidencias, self._indice_coincidencia)
-        self._actualizar_contador()
-        self._ir_a_coincidencia()
+        self._vista()._ejecutar_busqueda(texto, coincidir_mayusculas)
 
     def _busqueda_siguiente(self) -> None:
-        self._mover_coincidencia(1)
+        self._vista()._busqueda_siguiente()
 
     def _busqueda_anterior(self) -> None:
-        self._mover_coincidencia(-1)
-
-    def _mover_coincidencia(self, paso: int) -> None:
-        if not self._coincidencias:
-            return
-        total = len(self._coincidencias)
-        self._indice_coincidencia = (self._indice_coincidencia + paso) % total
-        self._capa_busqueda.set_activa(self._indice_coincidencia)
-        self._actualizar_contador()
-        self._ir_a_coincidencia()
-
-    def _ir_a_coincidencia(self) -> None:
-        if not self._coincidencias or self._indice_coincidencia < 0:
-            return
-        coincidencia = self._coincidencias[self._indice_coincidencia]
-        self._visor.centrar_en(coincidencia.pagina, coincidencia.rect_pt)
-
-    def _actualizar_contador(self) -> None:
-        total = len(self._coincidencias)
-        actual = self._indice_coincidencia + 1 if total else 0
-        self._barra_busqueda.mostrar_contador(actual, total)
-
-    def _reiniciar_busqueda(self) -> None:
-        """Descarta el estado y los resaltados de búsqueda (al abrir/cerrar)."""
-        self._coincidencias = ()
-        self._indice_coincidencia = -1
-        self._termino_busqueda = ""
-        self._capa_busqueda.limpiar()
+        self._vista()._busqueda_anterior()
 
     def _cerrar_busqueda(self) -> None:
-        self._barra_busqueda.hide()
-        self._reiniciar_busqueda()
-        self._visor.setFocus()
+        self._vista()._cerrar_busqueda()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._documento is not None and self._guardar_form.hay_cambios_sin_guardar(
-            self._documento
-        ):
-            respuesta = QMessageBox.question(
-                self,
-                "Cambios sin guardar",
-                "Hay cambios sin guardar. ¿Guardar antes de cerrar?",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if respuesta == QMessageBox.StandardButton.Save:
-                self._guardar()
-                event.accept()
-            elif respuesta == QMessageBox.StandardButton.Discard:
-                event.accept()
-            else:
+        # Todas las pestañas con cambios sin guardar se resuelven en un aviso.
+        for vista in self._vistas():
+            if not self._confirmar_cierre_documento(vista, activar=True):
                 event.ignore()
-        else:
-            event.accept()
+                return
+        self._guardar_sesion()
+        for vista in self._vistas():
+            if vista.documento is not None:
+                self._guardar_estado_documento(vista.documento, vista)
+        event.accept()
+
+    # -- Sesión y estado por documento (persistencia) -----------------------
+
+    def _confirmar_cierre_documento(
+        self, vista: VistaDocumento, activar: bool = False
+    ) -> bool:
+        """Ofrece guardar los cambios pendientes de una pestaña antes de cerrarla.
+        Devuelve False solo si el usuario cancela."""
+        doc = vista.documento
+        if doc is None or not self._guardar_form.hay_cambios_sin_guardar(doc):
+            return True
+        if activar:
+            self._pestanas.setCurrentWidget(vista)
+        respuesta = QMessageBox.question(
+            self,
+            "Cambios sin guardar",
+            f"«{doc.ruta.name}» tiene cambios sin guardar. ¿Guardar antes de cerrar?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+        )
+        if respuesta == QMessageBox.StandardButton.Save:
+            try:
+                self._guardar_form.ejecutar(doc)
+            except Exception as exc:
+                QMessageBox.warning(self, "No se pudo guardar", str(exc))
+                return False
+            return True
+        return respuesta == QMessageBox.StandardButton.Discard
+
+    def _clave_estado(self, ruta: Path) -> str:
+        return hashlib.sha1(str(_resolver(ruta)).encode("utf-8")).hexdigest()[:16]
+
+    def _guardar_estado_documento(self, doc: Documento, vista: VistaDocumento) -> None:
+        clave = self._clave_estado(doc.ruta)
+        self._prefs.setValue(f"estado/{clave}/pagina", vista.visor.pagina_actual())
+        self._prefs.setValue(f"estado/{clave}/escala", vista.visor.escala)
+
+    def _restaurar_estado_documento(
+        self, doc: Documento, vista: VistaDocumento
+    ) -> None:
+        clave = self._clave_estado(doc.ruta)
+        escala = self._prefs.value(f"estado/{clave}/escala")
+        pagina = self._prefs.value(f"estado/{clave}/pagina")
+        if escala is not None:
+            vista.visor.set_escala(float(escala))
+        if pagina is not None:
+            vista.visor.ir_a_pagina(int(pagina))
+
+    def _guardar_sesion(self) -> None:
+        rutas = [
+            str(v.documento.ruta) for v in self._vistas() if v.documento is not None
+        ]
+        self._prefs.setValue(_CLAVE_SESION, rutas)
+        self._prefs.setValue(_CLAVE_SESION_ACTIVA, self._pestanas.currentIndex())
+
+    def _restaurar_sesion(self) -> None:
+        """Reabre los documentos de la sesión anterior (si está activado). Las
+        rutas que ya no existen se omiten en silencio."""
+        if not self._prefs.value(_CLAVE_RESTAURAR, True, type=bool):
+            return
+        valor = self._prefs.value(_CLAVE_SESION, [])
+        rutas = valor if isinstance(valor, list) else []
+        for ruta in rutas:
+            p = Path(str(ruta))
+            if p.exists():
+                self.abrir_ruta_con_aviso(p)
+        activa = self._prefs.value(_CLAVE_SESION_ACTIVA)
+        if activa is not None and 0 <= int(activa) < self._pestanas.count():
+            self._pestanas.setCurrentIndex(int(activa))
+
+    def _conmutar_restaurar_sesion(self, activado: bool) -> None:
+        self._prefs.setValue(_CLAVE_RESTAURAR, activado)
 
     # -- Arrastrar y soltar -------------------------------------------------
 

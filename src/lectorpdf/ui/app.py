@@ -23,7 +23,8 @@ def main(argv: list[str] | None = None) -> int:
         app.setWindowIcon(QIcon(str(icono_app)))
     aplicar_tema(app, cargar_tema_preferido())
 
-    ventana = MainWindow()
+    # Restaura la sesión anterior al arrancar (si el usuario lo tiene activado).
+    ventana = MainWindow(restaurar_sesion=True)
     ventana.show()
 
     # Permite abrir un PDF pasándolo como argumento: `lectorpdf documento.pdf`.

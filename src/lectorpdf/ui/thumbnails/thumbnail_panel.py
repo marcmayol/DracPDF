@@ -60,6 +60,12 @@ class ThumbnailPanel(QListWidget):
             self.addItem(item)
         self._render_visibles()
 
+    def limpiar(self) -> None:
+        """Vacía el panel (pestaña sin documento)."""
+        self._documento = None
+        self._renderizadas.clear()
+        self.clear()
+
     def seleccionar_pagina(self, indice: int) -> None:
         """Sincroniza la selección con el visor sin re-emitir la señal."""
         if indice < 0 or indice >= self.count():
