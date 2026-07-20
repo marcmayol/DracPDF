@@ -19,6 +19,12 @@ from PySide6.QtGui import (
     QKeySequence,
     QShortcut,
 )
+from PySide6.QtPrintSupport import (
+    QAbstractPrintDialog,
+    QPrintDialog,
+    QPrinter,
+    QPrintPreviewDialog,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -75,6 +81,7 @@ from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
+from lectorpdf.ui.impresion.impresion import imprimir_documento
 from lectorpdf.ui.outline.outline_panel import OutlinePanel
 from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
@@ -211,6 +218,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.FindPrevious, self, self._busqueda_anterior
         )
         QShortcut(QKeySequence("Ctrl+G"), self, self._ir_a_pagina_dialogo)
+        QShortcut(QKeySequence.StandardKey.Print, self, self._imprimir)
 
     def _construir_dock_miniaturas(self) -> None:
         self._panel_lateral = QTabWidget()
@@ -240,6 +248,7 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "page-prev", "Página anterior", self._visor.pagina_anterior)
         self._accion_icono(barra, "page-next", "Página siguiente", self._visor.pagina_siguiente)
         self._accion_icono(barra, "search", "Buscar (Ctrl+F)", self._activar_busqueda)
+        self._accion_icono(barra, "print", "Imprimir (Ctrl+P)", self._imprimir)
         barra.addSeparator()
         self._accion_icono(barra, "zoom-out", "Alejar", self._visor.zoom_alejar)
         self._accion_icono(barra, "zoom-in", "Acercar", self._visor.zoom_acercar)
@@ -731,6 +740,37 @@ class MainWindow(QMainWindow):
         )
         if respuesta == QMessageBox.StandardButton.Open:
             QDesktopServices.openUrl(QUrl(uri))
+
+    # -- Impresión ----------------------------------------------------------
+
+    def _imprimir(self) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setFromTo(1, doc.num_paginas)  # habilita el rango en el diálogo
+        dialogo = QPrintDialog(printer, self)
+        dialogo.setOption(
+            QAbstractPrintDialog.PrintDialogOption.PrintPageRange, True
+        )
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        primera = (printer.fromPage() or 1) - 1
+        ultima = (printer.toPage() or doc.num_paginas) - 1
+        imprimir_documento(printer, doc, self._renderizar, primera, ultima)
+
+    def _vista_previa_impresion(self) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        dialogo = QPrintPreviewDialog(printer, self)
+        dialogo.paintRequested.connect(
+            lambda pr: imprimir_documento(
+                pr, doc, self._renderizar, 0, doc.num_paginas - 1
+            )
+        )
+        dialogo.exec()
 
     # -- Búsqueda -----------------------------------------------------------
 

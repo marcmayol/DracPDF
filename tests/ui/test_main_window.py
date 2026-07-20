@@ -233,6 +233,39 @@ def test_ir_a_pagina_dialogo(
     assert ventana._visor.pagina_actual() == 2  # página 3 (1-based) -> índice 2
 
 
+def test_imprimir_desde_la_ventana_produce_pdf(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtPrintSupport import QPrinter
+    from PySide6.QtWidgets import QDialog
+
+    ventana = MainWindow()
+    ventana.abrir_ruta(_pdf(tmp_path, paginas=3))
+    salida = tmp_path / "impreso.pdf"
+
+    class _DialogoFalso:
+        def __init__(self, printer: QPrinter, parent: object) -> None:
+            self._printer = printer
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(str(salida))
+            printer.setResolution(150)
+
+        def setOption(self, *a: object, **k: object) -> None:
+            pass
+
+        def exec(self) -> int:
+            self._printer.setFromTo(1, 3)
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(mw, "QPrintDialog", _DialogoFalso)
+    ventana._imprimir()
+
+    assert salida.exists()
+    doc = fitz.open(salida)
+    assert doc.page_count == 3
+    doc.close()
+
+
 # -- Formularios ------------------------------------------------------------
 
 
