@@ -73,6 +73,9 @@ class PyMuPDFFormService:
     def esta_sucio(self, documento_id: str) -> bool:
         return self._registro.tiene(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
+    def esta_firmado(self, documento_id: str) -> bool:
+        return self._registro.tiene(documento_id, Marca.FIRMADO)
+
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         self._registro.guardar_incremental(documento_id, destino)
 

@@ -74,7 +74,9 @@ from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
+from lectorpdf.ui import recientes
 from lectorpdf.ui.about_dialog import AboutDialog
+from lectorpdf.ui.banda_firmado import BandaFirmado
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
@@ -110,6 +112,7 @@ _ORG = "lectorpdf"
 _APP = "lectorpdf"
 _CLAVE_DOBLE = "vista/doble_pagina"
 _CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
+_CLAVE_RECIENTES = "archivo/recientes"
 
 
 class MainWindow(QMainWindow):
@@ -168,6 +171,8 @@ class MainWindow(QMainWindow):
         self._capa_enlaces = EnlacesLayer(self._visor, self._obtener_enlaces)
         self._barra_busqueda = BarraBusqueda()
         self._barra_busqueda.hide()
+        self._banda_firmado = BandaFirmado()
+        self._banda_firmado.hide()
         self._biblioteca = BibliotecaFirmas(directorio_por_defecto())
         self.setCentralWidget(self._construir_central())
 
@@ -212,6 +217,7 @@ class MainWindow(QMainWindow):
         disposicion = QVBoxLayout(central)
         disposicion.setContentsMargins(0, 0, 0, 0)
         disposicion.setSpacing(0)
+        disposicion.addWidget(self._banda_firmado)
         disposicion.addWidget(self._barra_busqueda)
         disposicion.addWidget(self._visor, 1)
         return central
@@ -281,6 +287,7 @@ class MainWindow(QMainWindow):
         barra.addWidget(self._etiqueta_pagina)
 
     def _construir_menu(self) -> None:
+        self._construir_menu_archivo()
         menu = self.menuBar().addMenu("Herramientas")
         self._accion_menu(menu, "Unir PDF…", self._menu_unir)
         self._accion_menu(menu, "Dividir PDF…", self._menu_dividir)
@@ -293,11 +300,32 @@ class MainWindow(QMainWindow):
         self._accion_menu(menu, "Exportar a PNG…", self._menu_exportar_png)
         self._accion_menu(menu, "Exportar a texto…", self._menu_exportar_texto)
 
+    def _construir_menu_archivo(self) -> None:
+        menu = self.menuBar().addMenu("Archivo")
+        self._accion_menu(menu, "Abrir…", self._abrir_por_dialogo, "Ctrl+O")
+        self._menu_recientes = menu.addMenu("Abrir recientes")
+        self._reconstruir_menu_recientes()
+        menu.addSeparator()
+        self._accion_menu(menu, "Guardar", self._guardar, "Ctrl+S")
+        self._accion_menu(menu, "Guardar como…", self._guardar_como, "Ctrl+Shift+S")
+        self._accion_menu(menu, "Guardar una copia…", self._guardar_copia)
+        menu.addSeparator()
+        self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
+        self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
+        menu.addSeparator()
+        self._accion_menu(menu, "Salir", self.close, "Ctrl+Q")
+
     def _accion_menu(
-        self, menu: QMenu, texto: str, callback: Callable[[], None]
+        self,
+        menu: QMenu,
+        texto: str,
+        callback: Callable[[], object],
+        atajo: str | None = None,
     ) -> QAction:
         accion = QAction(texto, self)
         accion.triggered.connect(callback)
+        if atajo is not None:
+            accion.setShortcut(QKeySequence(atajo))
         menu.addAction(accion)
         return accion
 
@@ -349,6 +377,7 @@ class MainWindow(QMainWindow):
         self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
         self._barra_busqueda.anterior.connect(self._busqueda_anterior)
         self._barra_busqueda.cerrada.connect(self._cerrar_busqueda)
+        self._banda_firmado.copia_solicitada.connect(self._guardar_copia)
 
     # -- Acciones -----------------------------------------------------------
 
@@ -362,10 +391,86 @@ class MainWindow(QMainWindow):
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
         self._cargar_indice(documento)
+        self._actualizar_banda_firmado()
+        self._registrar_reciente(ruta)
         nombre = documento.titulo or ruta.name
         self.setWindowTitle(f"{nombre} — {_TITULO_BASE}")
         self._actualizar_etiqueta(0)
         return documento
+
+    # -- Archivo: recientes, guardar como/copia, banda de firmado -----------
+
+    def _recientes(self) -> list[str]:
+        valor = self._prefs.value(_CLAVE_RECIENTES, [])
+        if isinstance(valor, list):
+            return [str(v) for v in valor]
+        return [str(valor)] if valor else []
+
+    def _registrar_reciente(self, ruta: Path) -> None:
+        lista = recientes.anadir(self._recientes(), str(ruta))
+        self._prefs.setValue(_CLAVE_RECIENTES, lista)
+        self._reconstruir_menu_recientes()
+
+    def _reconstruir_menu_recientes(self) -> None:
+        self._menu_recientes.clear()
+        lista = self._recientes()
+        if not lista:
+            vacio = self._menu_recientes.addAction("(sin documentos recientes)")
+            vacio.setEnabled(False)
+            return
+        for ruta in lista:
+            accion = self._menu_recientes.addAction(recientes.elidir(ruta))
+            accion.setToolTip(ruta)
+            accion.triggered.connect(
+                lambda _=False, r=ruta: self.abrir_ruta_con_aviso(Path(r))
+            )
+        self._menu_recientes.addSeparator()
+        self._menu_recientes.addAction("Limpiar lista").triggered.connect(
+            self._limpiar_recientes
+        )
+
+    def _limpiar_recientes(self) -> None:
+        self._prefs.remove(_CLAVE_RECIENTES)
+        self._reconstruir_menu_recientes()
+
+    def _guardar_como(self) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar como", doc.ruta.name, "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        try:
+            self._guardar_form.ejecutar(doc, Path(destino_str))
+        except Exception as exc:  # errores de E/S de PyMuPDF al guardar
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return
+        self.abrir_ruta_con_aviso(Path(destino_str))  # trabaja sobre el nuevo
+
+    def _guardar_copia(self) -> None:
+        """Guarda una copia sin cambiar de documento. Es la vía de escape para
+        obtener una copia de un documento firmado (que no se puede editar)."""
+        doc = self._documento
+        if doc is None:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar una copia", f"copia_{doc.ruta.name}", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        try:
+            self._guardar_form.ejecutar(doc, Path(destino_str))
+        except Exception as exc:
+            QMessageBox.warning(self, "No se pudo guardar la copia", str(exc))
+            return
+        QMessageBox.information(self, "Copia guardada", f"Copia guardada en:\n{destino_str}")
+
+    def _actualizar_banda_firmado(self) -> None:
+        doc = self._documento
+        firmado = doc is not None and self._guardar_form.esta_firmado(doc)
+        self._banda_firmado.setVisible(firmado)
 
     def _cargar_formulario(self, documento: Documento) -> None:
         """Lista los campos y los pasa al overlay; avisa si el PDF es XFA."""
@@ -461,6 +566,7 @@ class MainWindow(QMainWindow):
         if self._documento is None:
             return
         self._capa_form.set_campos((), documento=self._documento)
+        self._actualizar_banda_firmado()
         resultados = self._verificar.ejecutar(self._documento, [])
         self._panel_verificacion.mostrar(resultados)
 

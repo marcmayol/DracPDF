@@ -33,6 +33,10 @@ class FormService(Protocol):
         """True si hay cambios en memoria sin guardar a disco."""
         ...
 
+    def esta_firmado(self, documento_id: str) -> bool:
+        """True si el documento contiene firmas (edición bloqueada)."""
+        ...
+
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         """Guarda los cambios. Con `destino=None` guarda incremental sobre el
         propio fichero; con un `destino` distinto hace un guardado completo.

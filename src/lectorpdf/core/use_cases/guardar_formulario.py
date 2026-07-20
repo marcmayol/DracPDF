@@ -18,3 +18,6 @@ class GuardarFormulario:
 
     def hay_cambios_sin_guardar(self, documento: Documento) -> bool:
         return self._servicio.esta_sucio(documento.id)
+
+    def esta_firmado(self, documento: Documento) -> bool:
+        return self._servicio.esta_firmado(documento.id)

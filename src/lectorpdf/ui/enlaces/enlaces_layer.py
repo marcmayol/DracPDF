@@ -64,22 +64,24 @@ class EnlacesLayer(QObject):
         visor = getattr(self, "_visor", None)
         if visor is None or self._documento is None:
             return False
-        if obj is not visor.viewport() or not isinstance(event, QMouseEvent):
-            return super().eventFilter(obj, event)
-
-        pos = event.position().toPoint()
-        tipo = event.type()
-        if tipo == QEvent.Type.MouseMove:
-            self._actualizar_cursor(pos)
+        try:
+            if obj is not visor.viewport() or not isinstance(event, QMouseEvent):
+                return super().eventFilter(obj, event)
+            pos = event.position().toPoint()
+            tipo = event.type()
+            if tipo == QEvent.Type.MouseMove:
+                self._actualizar_cursor(pos)
+                return False
+            if (
+                tipo == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
+                enlace = self._enlace_en_pos(pos)
+                if enlace is not None:
+                    self._activar(enlace)
+                    return True  # consume: no inicia selección
+        except RuntimeError:
             return False
-        if (
-            tipo == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            enlace = self._enlace_en_pos(pos)
-            if enlace is not None:
-                self._activar(enlace)
-                return True  # consume: no inicia selección
         return False
 
     def _enlace_en_pos(self, pos: QPoint) -> Enlace | None:

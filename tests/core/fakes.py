@@ -60,9 +60,11 @@ class FakeFormService:
         self,
         campos: tuple[CampoFormulario, ...] = (),
         es_xfa: bool = False,
+        firmado: bool = False,
     ) -> None:
         self._campos = campos
         self._es_xfa = es_xfa
+        self._firmado = firmado
         self.escrituras: list[tuple[str, str, str]] = []
         self.guardados: list[tuple[str, Path | None]] = []
         self.sucio = False
@@ -81,6 +83,9 @@ class FakeFormService:
 
     def esta_sucio(self, documento_id: str) -> bool:
         return self.sucio
+
+    def esta_firmado(self, documento_id: str) -> bool:
+        return self._firmado
 
     def guardar_incremental(self, documento_id: str, destino: Path | None) -> None:
         self.guardados.append((documento_id, destino))

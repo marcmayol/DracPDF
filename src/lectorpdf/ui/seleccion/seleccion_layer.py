@@ -199,15 +199,18 @@ class SeleccionLayer(QObject):
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         # Qt puede enrutar eventos al filtro durante la construcción/destrucción,
-        # cuando aún/ya no hay visor: se ignoran de forma segura.
+        # cuando aún no hay visor o su objeto C++ ya se destruyó: se ignoran.
         visor = getattr(self, "_visor", None)
         if visor is None:
             return False
-        tipo = event.type()
-        if obj is visor and tipo == QEvent.Type.KeyPress:
-            return self._al_teclado(event)
-        if obj is visor.viewport() and isinstance(event, QMouseEvent):
-            return self._al_raton(tipo, event)
+        try:
+            tipo = event.type()
+            if obj is visor and tipo == QEvent.Type.KeyPress:
+                return self._al_teclado(event)
+            if obj is visor.viewport() and isinstance(event, QMouseEvent):
+                return self._al_raton(tipo, event)
+        except RuntimeError:
+            return False
         return super().eventFilter(obj, event)
 
     def _al_teclado(self, event: QEvent) -> bool:

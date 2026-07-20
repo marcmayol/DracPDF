@@ -289,6 +289,79 @@ def test_modo_ajuste_se_persiste(qapp: object, tmp_path: Path) -> None:
         ventana._prefs.setValue(mw._CLAVE_MODO_AJUSTE, "LIBRE")
 
 
+# -- Menú Archivo: recientes, guardar como/copia, banda firmado (Fase 8) ----
+
+
+def test_abrir_registra_reciente(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ruta = _pdf(tmp_path)
+        ventana.abrir_ruta(ruta)
+        assert str(ruta) in ventana._recientes()
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_guardar_como_cambia_de_documento(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=2))
+        destino = tmp_path / "otro.pdf"
+        monkeypatch.setattr(
+            mw.QFileDialog, "getSaveFileName", lambda *a, **k: (str(destino), "")
+        )
+
+        ventana._guardar_como()
+
+        assert destino.exists()
+        assert ventana._documento is not None
+        assert ventana._documento.ruta == destino
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_guardar_copia_no_cambia_documento(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ventana = MainWindow()
+    try:
+        origen = _pdf(tmp_path, paginas=2)
+        ventana.abrir_ruta(origen)
+        copia = tmp_path / "copia.pdf"
+        monkeypatch.setattr(
+            mw.QFileDialog, "getSaveFileName", lambda *a, **k: (str(copia), "")
+        )
+        monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: None)
+
+        ventana._guardar_copia()
+
+        assert copia.exists()
+        assert ventana._documento is not None
+        assert ventana._documento.ruta == origen  # sigue en el original
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_banda_firmado_visible_para_documento_firmado(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.adapters.pymupdf.registro import Marca
+
+    ventana = MainWindow()
+    try:
+        documento = ventana.abrir_ruta(_pdf(tmp_path))
+        assert ventana._banda_firmado.isHidden()  # no firmado al abrir
+
+        ventana._registro.marcar(documento.id, Marca.FIRMADO)
+        ventana._actualizar_banda_firmado()
+
+        assert not ventana._banda_firmado.isHidden()
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 # -- Formularios ------------------------------------------------------------
 
 
