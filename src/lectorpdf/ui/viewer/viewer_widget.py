@@ -9,8 +9,19 @@ volver a desplazarse.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from enum import Enum, auto
+
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QPen, QPixmap, QResizeEvent, QWheelEvent
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QTransform,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -19,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from lectorpdf.core.domain.formularios import RectanguloPt
-from lectorpdf.core.domain.modelos import Documento
+from lectorpdf.core.domain.modelos import Documento, Pagina
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.forms.coordenadas import punto_escena_a_pdf, rect_pdf_a_escena
 from lectorpdf.ui.theme.tokens import PAPEL, PAPEL_BORDE, TEMA_POR_DEFECTO
@@ -38,6 +49,14 @@ FACTOR_ZOOM = 1.25
 _ClaveRender = tuple[int, float]
 
 
+class ModoAjuste(Enum):
+    """Modo de ajuste persistente del zoom (se re-aplica al cambiar el tamaño)."""
+
+    LIBRE = auto()  # zoom manual
+    ANCHO = auto()  # ajustar al ancho
+    PAGINA = auto()  # ajustar la página entera
+
+
 class ViewerWidget(QGraphicsView):
     """Muestra las páginas de un documento apiladas verticalmente."""
 
@@ -48,6 +67,8 @@ class ViewerWidget(QGraphicsView):
     escena_reconstruida = Signal()
     #: Se emite tras cada refresco de páginas visibles (scroll/zoom/apertura).
     vista_actualizada = Signal()
+    #: Se emite con el nombre del modo de ajuste al cambiar (para persistirlo).
+    modo_ajuste_cambiado = Signal(str)
 
     def __init__(self, caso_render: RenderizarPagina) -> None:
         super().__init__()
@@ -59,6 +80,9 @@ class ViewerWidget(QGraphicsView):
         self._pixmaps: dict[int, QGraphicsPixmapItem] = {}
         self._cache: CacheLRU[_ClaveRender, QPixmap] = CacheLRU(_CAPACIDAD_CACHE)
         self._pagina_emitida = -1
+        self._modo = ModoAjuste.LIBRE
+        self._doble = False
+        self._rotacion = 0  # grados de rotación de vista: 0, 90, 180, 270
 
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
@@ -85,11 +109,32 @@ class ViewerWidget(QGraphicsView):
         self._documento = documento
         self._escala = _acotar_escala(escala)
         self._pagina_emitida = -1
+        self._rotacion = 0  # la rotación de vista no se hereda entre documentos
         self._cache.limpiar()
         self._construir_escena()
         self._actualizar_paginas_visibles()
+        self._refit_si_procede()  # respeta el modo de ajuste persistente
 
     # -- Construcción de la escena ------------------------------------------
+
+    def _dims_pt(self, pagina: Pagina) -> tuple[float, float]:
+        """Dimensiones (ancho, alto) en puntos aplicando la rotación de vista."""
+        if self._rotacion in (90, 270):
+            return pagina.alto_pt, pagina.ancho_pt
+        return pagina.ancho_pt, pagina.alto_pt
+
+    def _filas(self) -> list[Sequence[Pagina]]:
+        """Páginas agrupadas en filas: una por fila, o dos si es doble página."""
+        if self._documento is None:
+            return []
+        paginas = self._documento.paginas
+        if self._doble:
+            return [paginas[i : i + 2] for i in range(0, len(paginas), 2)]
+        return [[p] for p in paginas]
+
+    def _ancho_fila_px(self, fila: Sequence[Pagina]) -> float:
+        paginas = sum(self._dims_pt(p)[0] for p in fila) * self._escala
+        return paginas + MARGEN_PX * (len(fila) - 1)  # separación entre las dos
 
     def _construir_escena(self) -> None:
         self._scene.clear()
@@ -100,23 +145,25 @@ class ViewerWidget(QGraphicsView):
             self._scene.setSceneRect(QRectF())
             return
 
-        ancho_max = (
-            max((p.ancho_pt for p in self._documento.paginas), default=0.0)
-            * self._escala
-        )
+        filas = self._filas()
+        ancho_max = max((self._ancho_fila_px(f) for f in filas), default=0.0)
 
         y = MARGEN_PX
-        for pagina in self._documento.paginas:
-            ancho_px = pagina.ancho_pt * self._escala
-            alto_px = pagina.alto_pt * self._escala
-            x = (ancho_max - ancho_px) / 2.0
-            rect = QRectF(x, y, ancho_px, alto_px)
-            self._geometria[pagina.indice] = rect
-
-            self._fondos[pagina.indice] = self._scene.addRect(
-                rect, QPen(_COLOR_BORDE), QBrush(_COLOR_PAGINA)
-            )
-            y += alto_px + MARGEN_PX
+        for fila in filas:
+            alto_fila = max(self._dims_pt(p)[1] for p in fila) * self._escala
+            x = (ancho_max - self._ancho_fila_px(fila)) / 2.0
+            for pagina in fila:
+                aw, ah = self._dims_pt(pagina)
+                ancho_px = aw * self._escala
+                alto_px = ah * self._escala
+                yy = y + (alto_fila - alto_px) / 2.0  # centrado vertical en la fila
+                rect = QRectF(x, yy, ancho_px, alto_px)
+                self._geometria[pagina.indice] = rect
+                self._fondos[pagina.indice] = self._scene.addRect(
+                    rect, QPen(_COLOR_BORDE), QBrush(_COLOR_PAGINA)
+                )
+                x += ancho_px + MARGEN_PX
+            y += alto_fila + MARGEN_PX
 
         self._scene.setSceneRect(0, 0, ancho_max + 2 * MARGEN_PX, y)
         self.escena_reconstruida.emit()
@@ -208,6 +255,8 @@ class ViewerWidget(QGraphicsView):
             pixmap = qpixmap_desde(imagen)
             self._cache.poner(clave, pixmap)
 
+        if self._rotacion:
+            pixmap = pixmap.transformed(QTransform().rotate(self._rotacion))
         item = self._scene.addPixmap(pixmap)
         item.setPos(self._geometria[indice].topLeft())
         item.setZValue(1.0)
@@ -260,6 +309,29 @@ class ViewerWidget(QGraphicsView):
     # -- Zoom ---------------------------------------------------------------
 
     def set_escala(self, escala: float) -> None:
+        """Zoom manual: cancela el modo de ajuste persistente."""
+        self._set_modo(ModoAjuste.LIBRE)
+        self._aplicar_escala(escala)
+
+    def _set_modo(self, modo: ModoAjuste) -> None:
+        if modo != self._modo:
+            self._modo = modo
+            self.modo_ajuste_cambiado.emit(modo.name)
+
+    def modo_ajuste(self) -> str:
+        return self._modo.name
+
+    def set_modo_ajuste(self, nombre: str) -> None:
+        """Restaura el modo de ajuste por su nombre (persistencia). Lo aplica si
+        ya hay documento; si no, quedará listo para el siguiente que se abra."""
+        try:
+            modo = ModoAjuste[nombre]
+        except KeyError:
+            return
+        self._modo = modo
+        self._refit_si_procede()
+
+    def _aplicar_escala(self, escala: float) -> None:
         escala = _acotar_escala(escala)
         if self._documento is None or escala == self._escala:
             self._escala = escala
@@ -276,28 +348,69 @@ class ViewerWidget(QGraphicsView):
     def zoom_alejar(self) -> None:
         self.set_escala(self._escala / FACTOR_ZOOM)
 
+    def _refit_si_procede(self) -> None:
+        """Re-aplica el ajuste si hay un modo persistente activo (ancho/página)."""
+        if self._modo == ModoAjuste.ANCHO:
+            self._aplicar_escala(self.escala_para_ancho())
+        elif self._modo == ModoAjuste.PAGINA:
+            self._aplicar_escala(self.escala_para_pagina())
+
     def escala_para_ancho(self) -> float:
-        """Escala que hace caber el ancho de la página más ancha en la vista."""
+        """Escala que hace caber el ancho del contenido más ancho (una página, o
+        el par de páginas en modo doble) en la vista."""
         if self._documento is None:
             return self._escala
-        ancho_max_pt = max(p.ancho_pt for p in self._documento.paginas)
+        ancho_max_pt = max(
+            sum(self._dims_pt(p)[0] for p in fila) for fila in self._filas()
+        )
         disponible = self.viewport().width() - 2 * MARGEN_PX
         return _acotar_escala(disponible / ancho_max_pt)
 
     def escala_para_pagina(self) -> float:
-        """Escala que hace caber la página actual entera (ancho y alto)."""
+        """Escala que hace caber la página actual entera (ancho y alto). En modo
+        doble el ancho disponible se reparte entre las dos páginas."""
         if self._documento is None:
             return self._escala
-        pagina = self._documento.paginas[self.pagina_actual()]
-        escala_ancho = (self.viewport().width() - 2 * MARGEN_PX) / pagina.ancho_pt
-        escala_alto = (self.viewport().height() - 2 * MARGEN_PX) / pagina.alto_pt
+        aw, ah = self._dims_pt(self._documento.paginas[self.pagina_actual()])
+        factor = 2 if self._doble else 1
+        escala_ancho = (self.viewport().width() - 2 * MARGEN_PX) / (aw * factor)
+        escala_alto = (self.viewport().height() - 2 * MARGEN_PX) / ah
         return _acotar_escala(min(escala_ancho, escala_alto))
 
     def ajustar_a_ancho(self) -> None:
-        self.set_escala(self.escala_para_ancho())
+        self._set_modo(ModoAjuste.ANCHO)
+        self._aplicar_escala(self.escala_para_ancho())
 
     def ajustar_a_pagina(self) -> None:
-        self.set_escala(self.escala_para_pagina())
+        self._set_modo(ModoAjuste.PAGINA)
+        self._aplicar_escala(self.escala_para_pagina())
+
+    # -- Doble página y rotación de vista (solo presentación) ---------------
+
+    def set_doble_pagina(self, doble: bool) -> None:
+        if doble == self._doble:
+            return
+        self._doble = doble
+        self._reconstruir_conservando_pagina()
+
+    def doble_pagina(self) -> bool:
+        return self._doble
+
+    def rotar_vista(self, grados: int = 90) -> None:
+        """Rota la presentación (no el documento) en múltiplos de 90 grados. El
+        pixmap se rota al mostrarlo, así que la caché de render sigue siendo
+        válida (guarda la página sin rotar)."""
+        self._rotacion = (self._rotacion + grados) % 360
+        self._reconstruir_conservando_pagina()
+
+    def rotacion(self) -> int:
+        return self._rotacion
+
+    def _reconstruir_conservando_pagina(self) -> None:
+        actual = self.pagina_actual()
+        self._construir_escena()
+        self.ir_a_pagina(actual)
+        self._refit_si_procede()
 
     # -- Eventos ------------------------------------------------------------
 
@@ -318,6 +431,7 @@ class ViewerWidget(QGraphicsView):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        self._refit_si_procede()  # el ajuste ancho/página se re-aplica al tamaño
         self._actualizar_paginas_visibles()
 
 

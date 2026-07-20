@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Qt, QUrl
+from PySide6.QtCore import QMimeData, QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -106,6 +106,10 @@ from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
 _TITULO_BASE = NOMBRE_APP
+_ORG = "lectorpdf"
+_APP = "lectorpdf"
+_CLAVE_DOBLE = "vista/doble_pagina"
+_CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
 
 
 class MainWindow(QMainWindow):
@@ -143,6 +147,7 @@ class MainWindow(QMainWindow):
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
+        self._prefs = QSettings(_ORG, _APP)
         self._acciones_icono: list[tuple[QAction, str]] = []
 
         # Estado de búsqueda del documento activo (se limpia al abrir/cerrar).
@@ -176,6 +181,7 @@ class MainWindow(QMainWindow):
         self._construir_atajos()
 
         self._aplicar_tema_actual()
+        self._restaurar_modos_de_vista()
         self.setAcceptDrops(True)
         self.setWindowTitle(_TITULO_BASE)
         self._aplicar_icono_ventana()
@@ -219,6 +225,7 @@ class MainWindow(QMainWindow):
         )
         QShortcut(QKeySequence("Ctrl+G"), self, self._ir_a_pagina_dialogo)
         QShortcut(QKeySequence.StandardKey.Print, self, self._imprimir)
+        QShortcut(QKeySequence("F11"), self, self._conmutar_pantalla_completa)
 
     def _construir_dock_miniaturas(self) -> None:
         self._panel_lateral = QTabWidget()
@@ -252,8 +259,15 @@ class MainWindow(QMainWindow):
         barra.addSeparator()
         self._accion_icono(barra, "zoom-out", "Alejar", self._visor.zoom_alejar)
         self._accion_icono(barra, "zoom-in", "Acercar", self._visor.zoom_acercar)
-        self._accion(barra, "Ajustar ancho", self._visor.ajustar_a_ancho)
-        self._accion(barra, "Ajustar página", self._visor.ajustar_a_pagina)
+        self._accion_icono(barra, "fit-width", "Ajustar ancho", self._visor.ajustar_a_ancho)
+        self._accion_icono(barra, "fit-page", "Ajustar página", self._visor.ajustar_a_pagina)
+        self._accion_doble = self._accion_conmutable(
+            barra, "page-double", "Doble página", self._conmutar_doble
+        )
+        self._accion_icono(barra, "rotate", "Rotar vista", lambda: self._visor.rotar_vista(90))
+        self._accion_icono(
+            barra, "fullscreen", "Pantalla completa (F11)", self._conmutar_pantalla_completa
+        )
         barra.addSeparator()
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
@@ -305,6 +319,21 @@ class MainWindow(QMainWindow):
         barra.addAction(accion)
         self._acciones_icono.append((accion, nombre_icono))
 
+    def _accion_conmutable(
+        self,
+        barra: QToolBar,
+        nombre_icono: str,
+        tooltip: str,
+        callback: Callable[[bool], None],
+    ) -> QAction:
+        accion = QAction(icono(nombre_icono, self._tema.text), tooltip, self)
+        accion.setToolTip(tooltip)
+        accion.setCheckable(True)
+        accion.toggled.connect(callback)
+        barra.addAction(accion)
+        self._acciones_icono.append((accion, nombre_icono))
+        return accion
+
     def _conectar_senales(self) -> None:
         self._visor.pagina_cambiada.connect(self._miniaturas.seleccionar_pagina)
         self._visor.pagina_cambiada.connect(self._actualizar_etiqueta)
@@ -315,6 +344,7 @@ class MainWindow(QMainWindow):
         self._outline.pagina_seleccionada.connect(self._visor.ir_a_pagina)
         self._capa_enlaces.navegar_interno.connect(self._visor.ir_a_pagina)
         self._capa_enlaces.abrir_externo.connect(self._confirmar_abrir_url)
+        self._visor.modo_ajuste_cambiado.connect(self._guardar_modo_ajuste)
         self._barra_busqueda.buscar.connect(self._ejecutar_busqueda)
         self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
         self._barra_busqueda.anterior.connect(self._busqueda_anterior)
@@ -740,6 +770,29 @@ class MainWindow(QMainWindow):
         )
         if respuesta == QMessageBox.StandardButton.Open:
             QDesktopServices.openUrl(QUrl(uri))
+
+    # -- Modos de vista -----------------------------------------------------
+
+    def _conmutar_doble(self, activado: bool) -> None:
+        self._visor.set_doble_pagina(activado)
+        self._prefs.setValue(_CLAVE_DOBLE, activado)
+
+    def _conmutar_pantalla_completa(self) -> None:
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def _guardar_modo_ajuste(self, nombre: str) -> None:
+        self._prefs.setValue(_CLAVE_MODO_AJUSTE, nombre)
+
+    def _restaurar_modos_de_vista(self) -> None:
+        """Aplica las preferencias de doble página y modo de ajuste al arrancar."""
+        doble = self._prefs.value(_CLAVE_DOBLE, False, type=bool)
+        if doble:
+            self._accion_doble.setChecked(True)  # dispara _conmutar_doble
+        modo = str(self._prefs.value(_CLAVE_MODO_AJUSTE, "LIBRE"))
+        self._visor.set_modo_ajuste(modo)
 
     # -- Impresión ----------------------------------------------------------
 

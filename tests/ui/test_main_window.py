@@ -266,6 +266,29 @@ def test_imprimir_desde_la_ventana_produce_pdf(
     doc.close()
 
 
+# -- Modos de vista (Fase 8) ------------------------------------------------
+
+
+def test_conmutar_doble_actualiza_visor_y_prefs(qapp: object) -> None:
+    ventana = MainWindow()
+    try:
+        ventana._conmutar_doble(True)
+        assert ventana._visor.doble_pagina() is True
+        assert ventana._prefs.value(mw._CLAVE_DOBLE, type=bool) is True
+    finally:
+        ventana._prefs.setValue(mw._CLAVE_DOBLE, False)
+
+
+def test_modo_ajuste_se_persiste(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        ventana._visor.ajustar_a_ancho()
+        assert ventana._prefs.value(mw._CLAVE_MODO_AJUSTE) == "ANCHO"
+    finally:
+        ventana._prefs.setValue(mw._CLAVE_MODO_AJUSTE, "LIBRE")
+
+
 # -- Formularios ------------------------------------------------------------
 
 
