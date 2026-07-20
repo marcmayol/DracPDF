@@ -9,7 +9,11 @@ estructural, su puerto pequeño correspondiente.
 from __future__ import annotations
 
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
-from lectorpdf.core.domain.contenido import Coincidencia, PalabraTexto
+from lectorpdf.core.domain.contenido import (
+    Coincidencia,
+    EntradaIndice,
+    PalabraTexto,
+)
 from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import Progreso
 
@@ -59,4 +63,13 @@ class PyMuPDFContenido:
             for x0, y0, x1, y1, texto, bloque, linea, _ in p.get_text(
                 "words", sort=True
             )
+        )
+
+    def indice(self, documento_id: str) -> tuple[EntradaIndice, ...]:
+        """Índice (outline). `get_toc` da [nivel, título, página_1based]; la
+        página se pasa a 0-based (-1 si la entrada no apunta a ninguna)."""
+        doc = self._registro.obtener(documento_id)
+        return tuple(
+            EntradaIndice(nivel, titulo, pagina - 1 if pagina > 0 else -1)
+            for nivel, titulo, pagina in doc.get_toc()
         )

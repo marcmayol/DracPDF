@@ -54,6 +54,26 @@ def test_buscar_reporta_progreso_por_pagina(pdf_contenido: Path) -> None:
     assert hechos == [(1, 3), (2, 3), (3, 3)]  # 3 páginas
 
 
+def test_indice_coincide_con_get_toc(pdf_contenido: Path) -> None:
+    servicio, doc_id = _abrir(pdf_contenido)
+
+    entradas = servicio.indice(doc_id)
+
+    # get_toc del fixture: Portada(1), Introduccion(2), Desarrollo(1), Cierre(1)
+    # con páginas 1,1,2,3 (1-based) -> 0,0,1,2 (0-based).
+    assert [(e.nivel, e.titulo, e.pagina) for e in entradas] == [
+        (1, "Portada", 0),
+        (2, "Introduccion", 0),
+        (1, "Desarrollo", 1),
+        (1, "Cierre", 2),
+    ]
+
+
+def test_indice_vacio_si_no_hay_outline(pdf_simple: Path) -> None:
+    servicio, doc_id = _abrir(pdf_simple)
+    assert servicio.indice(doc_id) == ()
+
+
 def test_palabras_en_orden_de_lectura(pdf_contenido: Path) -> None:
     servicio, doc_id = _abrir(pdf_contenido)
 

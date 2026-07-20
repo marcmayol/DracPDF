@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -57,6 +58,7 @@ from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.obtener_indice import ObtenerIndice
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
 from lectorpdf.core.use_cases.organizar_paginas import OrganizarPaginas
 from lectorpdf.core.use_cases.proteger_pdf import ProtegerPdf
@@ -70,6 +72,7 @@ from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
+from lectorpdf.ui.outline.outline_panel import OutlinePanel
 from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.biblioteca_firmas import (
     BibliotecaFirmas,
@@ -125,6 +128,7 @@ class MainWindow(QMainWindow):
         self._exportar_texto = ExportarTexto(self._servicio_herr)
         self._buscar_contenido = BuscarEnDocumento(self._servicio_contenido)
         self._obtener_palabras = ObtenerPalabras(self._servicio_contenido)
+        self._obtener_indice = ObtenerIndice(self._servicio_contenido)
 
         self._documento: Documento | None = None
         self._tema = cargar_tema_preferido()
@@ -138,6 +142,7 @@ class MainWindow(QMainWindow):
 
         self._visor = ViewerWidget(self._renderizar)
         self._miniaturas = ThumbnailPanel(self._renderizar)
+        self._outline = OutlinePanel()
         self._capa_form = FormLayer(self._visor, self._rellenar)
         self._capa_firma = SignatureLayer(self._visor, self._estampar)
         self._capa_sello = DigitalSealLayer(self._visor, self._firmar_digital)
@@ -201,8 +206,13 @@ class MainWindow(QMainWindow):
         )
 
     def _construir_dock_miniaturas(self) -> None:
-        dock = QDockWidget("Miniaturas", self)
-        dock.setWidget(self._miniaturas)
+        self._panel_lateral = QTabWidget()
+        self._panel_lateral.addTab(self._miniaturas, "Miniaturas")
+        self._idx_tab_indice = self._panel_lateral.addTab(self._outline, "Índice")
+        self._panel_lateral.setTabVisible(self._idx_tab_indice, False)  # sin outline
+
+        dock = QDockWidget("Navegación", self)
+        dock.setWidget(self._panel_lateral)
         dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
@@ -286,6 +296,7 @@ class MainWindow(QMainWindow):
         self._miniaturas.rotar_solicitado.connect(self._rotar_pagina)
         self._miniaturas.eliminar_solicitado.connect(self._eliminar_pagina)
         self._miniaturas.mover_solicitado.connect(self._mover_pagina)
+        self._outline.pagina_seleccionada.connect(self._visor.ir_a_pagina)
         self._barra_busqueda.buscar.connect(self._ejecutar_busqueda)
         self._barra_busqueda.siguiente.connect(self._busqueda_siguiente)
         self._barra_busqueda.anterior.connect(self._busqueda_anterior)
@@ -301,6 +312,7 @@ class MainWindow(QMainWindow):
         self._visor.set_documento(documento)
         self._miniaturas.set_documento(documento)
         self._cargar_formulario(documento)
+        self._cargar_indice(documento)
         nombre = documento.titulo or ruta.name
         self.setWindowTitle(f"{nombre} — {_TITULO_BASE}")
         self._actualizar_etiqueta(0)
@@ -320,6 +332,12 @@ class MainWindow(QMainWindow):
             )
             return
         self._capa_form.set_campos(campos, documento=documento)
+
+    def _cargar_indice(self, documento: Documento) -> None:
+        """Puebla el árbol de índice y muestra su pestaña solo si hay outline."""
+        entradas = self._obtener_indice.ejecutar(documento)
+        tiene = self._outline.set_entradas(entradas)
+        self._panel_lateral.setTabVisible(self._idx_tab_indice, tiene)
 
     def _guardar(self) -> None:
         if self._documento is None:
@@ -439,6 +457,7 @@ class MainWindow(QMainWindow):
         self._visor.set_documento(nuevo, self._visor.escala)
         self._miniaturas.set_documento(nuevo)
         self._cargar_formulario(nuevo)
+        self._cargar_indice(nuevo)
 
     # -- Herramientas -------------------------------------------------------
 

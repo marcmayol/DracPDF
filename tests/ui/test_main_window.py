@@ -159,6 +159,27 @@ def test_seleccionar_rango_conocido_copia_ese_texto(
     assert capa.copiar() == "frase exacta seleccionable"
 
 
+# -- Índice / outline (Fase 8) ----------------------------------------------
+
+
+def test_indice_visible_y_navega_con_outline(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+
+    assert ventana._panel_lateral.isTabVisible(ventana._idx_tab_indice)
+    assert ventana._outline.topLevelItemCount() == 3  # Portada, Desarrollo, Cierre
+
+    ventana._outline._al_pulsar(ventana._outline.topLevelItem(1), 0)  # Desarrollo->1
+    assert ventana._visor.pagina_actual() == 1
+
+
+def test_pestana_indice_oculta_sin_outline(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    ventana.abrir_ruta(_pdf(tmp_path))  # PDF sin índice
+
+    assert not ventana._panel_lateral.isTabVisible(ventana._idx_tab_indice)
+
+
 # -- Formularios ------------------------------------------------------------
 
 

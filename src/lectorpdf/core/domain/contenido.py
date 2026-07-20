@@ -22,6 +22,16 @@ class Coincidencia:
 
 
 @dataclass(frozen=True)
+class EntradaIndice:
+    """Una entrada del índice (outline): nivel (1-based), título y página destino
+    (0-based; -1 si la entrada no apunta a ninguna página)."""
+
+    nivel: int
+    titulo: str
+    pagina: int
+
+
+@dataclass(frozen=True)
 class PalabraTexto:
     """Una palabra de una página con su rect (puntos) y su posición de lectura.
 
