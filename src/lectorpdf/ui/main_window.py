@@ -206,8 +206,8 @@ class MainWindow(QMainWindow):
         self._construir_dock_miniaturas()
         self._panel_verificacion = VerificationPanel()
         self._construir_dock_verificacion()
-        self._etiqueta_pagina = QLabel("—")
         self._construir_barra()
+        self._construir_barra_estado()
         self._construir_menu()
         self._conectar_senales()
         self._construir_atajos()
@@ -426,12 +426,12 @@ class MainWindow(QMainWindow):
         doc = vista.documento
         self._actualizar_acciones_documento()  # habilita conversiones según haya doc
         self._control_zoom.set_zoom(vista.visor.escala)
+        self._actualizar_barra_estado()
         if doc is None:
             self._miniaturas.limpiar()
             self._outline.set_entradas(())
             self._panel_lateral.setTabVisible(self._idx_tab_indice, False)
             self.setWindowTitle(_TITULO_BASE)
-            self._etiqueta_pagina.setText("—")
             self._control_pagina.set_estado(0, 0)
             return
         self._miniaturas.set_documento(doc)
@@ -453,6 +453,7 @@ class MainWindow(QMainWindow):
         if self.sender() is not self._vista():
             return
         self._control_zoom.set_zoom(escala)
+        self._estado_zoom.setText(f"{round(escala * 100)} %")
 
     def _construir_atajos(self) -> None:
         """Atajos que NO tienen entrada de menú (los demás llevan su atajo en la
@@ -603,6 +604,35 @@ class MainWindow(QMainWindow):
         self._barra_firma.addAction(self._accion_colocar)
         self._barra_firma.addAction(self._accion_cancelar)
         self._barra_firma.setVisible(False)  # solo en modo colocación
+
+    def _construir_barra_estado(self) -> None:
+        """Barra de estado inferior (maqueta 5.1): nombre · N páginas · ● Firmado
+        a la izquierda, porcentaje de zoom a la derecha."""
+        barra = self.statusBar()
+        self._estado_nombre = QLabel("")
+        self._estado_paginas = QLabel("")
+        self._estado_firmado = QLabel("")
+        # Verde de firma válida vía token (sigState=valid), como en la maqueta.
+        self._estado_firmado.setProperty("sigState", "valid")
+        self._estado_zoom = QLabel("")
+        barra.addWidget(self._estado_nombre)
+        barra.addWidget(self._estado_paginas)
+        barra.addWidget(self._estado_firmado)
+        barra.addPermanentWidget(self._estado_zoom)  # anclado a la derecha
+
+    def _actualizar_barra_estado(self) -> None:
+        doc = self._documento
+        if doc is None:
+            self._estado_nombre.setText("")
+            self._estado_paginas.setText("")
+            self._estado_firmado.setText("")
+            self._estado_zoom.setText("")
+            return
+        self._estado_nombre.setText(doc.titulo or doc.ruta.name)
+        self._estado_paginas.setText(f"{doc.num_paginas} páginas")
+        firmado = self._guardar_form.esta_firmado(doc)
+        self._estado_firmado.setText("● Firmado" if firmado else "")
+        self._estado_zoom.setText(f"{round(self._visor.escala * 100)} %")
 
     def _colocando_firma(self) -> bool:
         return self._capa_firma.colocando() or self._capa_sello.colocando()
@@ -941,6 +971,7 @@ class MainWindow(QMainWindow):
         doc = self._documento
         firmado = doc is not None and self._guardar_form.esta_firmado(doc)
         self._banda_firmado.setVisible(firmado)
+        self._actualizar_barra_estado()
 
     def _mostrar_propiedades(self) -> None:
         doc = self._documento
@@ -1471,7 +1502,6 @@ class MainWindow(QMainWindow):
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
-        self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
         self._control_pagina.set_estado(indice, total)
 
     # -- Navegación: ir a página y enlaces ----------------------------------

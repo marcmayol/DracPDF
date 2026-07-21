@@ -774,6 +774,24 @@ def test_control_zoom_ajusta_escala_al_escribir(qapp: object, tmp_path: Path) ->
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def test_barra_estado_refleja_documento_y_zoom(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        # Sin documento la barra de estado está vacía.
+        assert ventana._estado_nombre.text() == ""
+        assert ventana._estado_zoom.text() == ""
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=7))
+        assert ventana._estado_nombre.text() == "doc.pdf"
+        assert ventana._estado_paginas.text() == "7 páginas"
+        # El zoom se refleja y se actualiza al cambiarlo.
+        ventana._visor.set_escala(1.25)
+        assert ventana._estado_zoom.text() == "125 %"
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_boton_firmar_destacado_con_objectname(qapp: object) -> None:
     # El botón "Firmar con certificado" lleva objectName para el QSS de acento.
     ventana = MainWindow()
