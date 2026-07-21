@@ -757,3 +757,18 @@ def test_control_pagina_navega_al_escribir(qapp: object, tmp_path: Path) -> None
         assert ventana._visor.pagina_actual() == 4
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_control_zoom_ajusta_escala_al_escribir(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=2))
+        # Escribir un porcentaje fija la escala del visor.
+        ventana._control_zoom._campo.setText("150")
+        ventana._control_zoom._campo.editingFinished.emit()
+        assert ventana._visor.escala == 1.5
+        # Y un cambio de zoom del visor se refleja en el control.
+        ventana._visor.set_escala(0.75)
+        assert ventana._control_zoom._campo.text() == "75"
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)

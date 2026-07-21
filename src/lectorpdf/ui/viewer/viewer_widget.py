@@ -69,6 +69,8 @@ class ViewerWidget(QGraphicsView):
     vista_actualizada = Signal()
     #: Se emite con el nombre del modo de ajuste al cambiar (para persistirlo).
     modo_ajuste_cambiado = Signal(str)
+    #: Se emite con la escala (1.0 = 100 %) al cambiar el zoom.
+    escala_cambiada = Signal(float)
 
     def __init__(self, caso_render: RenderizarPagina) -> None:
         super().__init__()
@@ -335,12 +337,13 @@ class ViewerWidget(QGraphicsView):
         escala = _acotar_escala(escala)
         if self._documento is None or escala == self._escala:
             self._escala = escala
-            return
-        actual = self.pagina_actual()
-        self._escala = escala
-        self._cache.limpiar()
-        self._construir_escena()
-        self.ir_a_pagina(actual)
+        else:
+            actual = self.pagina_actual()
+            self._escala = escala
+            self._cache.limpiar()
+            self._construir_escena()
+            self.ir_a_pagina(actual)
+        self.escala_cambiada.emit(self._escala)
 
     def zoom_acercar(self) -> None:
         self.set_escala(self._escala * FACTOR_ZOOM)

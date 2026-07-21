@@ -38,6 +38,8 @@ class VistaDocumento(QWidget):
     pagina_cambiada = Signal(int)
     #: El modo de ajuste del visor cambió (para persistirlo globalmente).
     modo_ajuste_cambiado = Signal(str)
+    #: La escala (zoom) del visor cambió.
+    escala_cambiada = Signal(float)
     #: Enlace externo pulsado: la ventana confirma antes de abrir el navegador.
     abrir_externo = Signal(str)
     #: El usuario pide guardar una copia editable del documento firmado.
@@ -86,6 +88,7 @@ class VistaDocumento(QWidget):
 
         self.visor.pagina_cambiada.connect(self.pagina_cambiada)
         self.visor.modo_ajuste_cambiado.connect(self.modo_ajuste_cambiado)
+        self.visor.escala_cambiada.connect(self.escala_cambiada)
         self.capa_enlaces.navegar_interno.connect(self.visor.ir_a_pagina)
         self.capa_enlaces.abrir_externo.connect(self.abrir_externo)
         self.banda_firmado.copia_solicitada.connect(self.copia_solicitada)

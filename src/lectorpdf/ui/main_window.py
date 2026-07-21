@@ -87,6 +87,7 @@ from lectorpdf.ui.banda_firmado import BandaFirmado
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.controles.control_pagina import ControlPagina
+from lectorpdf.ui.controles.control_zoom import ControlZoom
 from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
 from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
@@ -237,6 +238,7 @@ class MainWindow(QMainWindow):
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
         self._control_pagina.recolorear(self._tema.text)
+        self._control_zoom.recolorear(self._tema.text)
         # Barra de título nativa: la ventana ahora, y las futuras vía el gestor.
         self._gestor_barra.set_oscuro(self._tema.es_oscuro)
         aplicar_modo_oscuro(self, self._tema.es_oscuro)
@@ -327,6 +329,7 @@ class MainWindow(QMainWindow):
         )
         vista.pagina_cambiada.connect(self._al_cambiar_pagina)
         vista.modo_ajuste_cambiado.connect(self._guardar_modo_ajuste)
+        vista.escala_cambiada.connect(self._al_cambiar_escala)
         vista.abrir_externo.connect(self._confirmar_abrir_url)
         vista.copia_solicitada.connect(self._guardar_copia)
         return vista
@@ -419,6 +422,7 @@ class MainWindow(QMainWindow):
         vista = self._vista()
         doc = vista.documento
         self._actualizar_acciones_documento()  # habilita conversiones según haya doc
+        self._control_zoom.set_zoom(vista.visor.escala)
         if doc is None:
             self._miniaturas.limpiar()
             self._outline.set_entradas(())
@@ -440,6 +444,12 @@ class MainWindow(QMainWindow):
             return
         self._miniaturas.seleccionar_pagina(indice)
         self._actualizar_etiqueta(indice)
+
+    def _al_cambiar_escala(self, escala: float) -> None:
+        """Cambió el zoom en alguna vista; refleja solo si es la activa."""
+        if self.sender() is not self._vista():
+            return
+        self._control_zoom.set_zoom(escala)
 
     def _construir_atajos(self) -> None:
         """Atajos que NO tienen entrada de menú (los demás llevan su atajo en la
@@ -540,8 +550,11 @@ class MainWindow(QMainWindow):
         self._control_pagina.pagina_pedida.connect(self._ir_a_pagina_activa)
         barra.addWidget(self._control_pagina)
         barra.addSeparator()
-        self._accion_icono(barra, "zoom-out", "Alejar", self._zoom_alejar)
-        self._accion_icono(barra, "zoom-in", "Acercar", self._zoom_acercar)
+        self._control_zoom = ControlZoom()
+        self._control_zoom.alejar.connect(self._zoom_alejar)
+        self._control_zoom.acercar.connect(self._zoom_acercar)
+        self._control_zoom.zoom_pedido.connect(lambda f: self._visor.set_escala(f))
+        barra.addWidget(self._control_zoom)
         barra.addSeparator()
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
