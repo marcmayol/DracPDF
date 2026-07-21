@@ -12,6 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QMimeData, QPoint, QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QCloseEvent,
     QDesktopServices,
     QDragEnterEvent,
@@ -107,7 +108,7 @@ from lectorpdf.ui.theme.estilos import (
 )
 from lectorpdf.ui.theme.iconos import icono
 from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
-from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO
+from lectorpdf.ui.theme.tokens import TEMA_CLARO, TEMA_OSCURO, Tema
 from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 from lectorpdf.ui.vista_documento import VistaDocumento
@@ -176,6 +177,7 @@ class MainWindow(QMainWindow):
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(_ORG, _APP)
         self._acciones_icono: list[tuple[QAction, str]] = []
+        self._sincronizando_doble = False  # evita recursión al sincronizar radios
         # Sincroniza la barra de título nativa (Windows) con el tema en cada
         # ventana que se muestre (principal, diálogos, mensajes). Un único gestor
         # por QApplication (no acumula filtros al crear varias ventanas).
@@ -422,20 +424,12 @@ class MainWindow(QMainWindow):
         self._actualizar_etiqueta(indice)
 
     def _construir_atajos(self) -> None:
-        """Atajos de teclado a nivel de ventana (se ampliará en la tarea 13)."""
-        QShortcut(QKeySequence.StandardKey.Find, self, self._activar_busqueda)
+        """Atajos que NO tienen entrada de menú (los demás llevan su atajo en la
+        acción del menú, para no duplicarlos)."""
         QShortcut(QKeySequence.StandardKey.FindNext, self, self._busqueda_siguiente)
         QShortcut(
             QKeySequence.StandardKey.FindPrevious, self, self._busqueda_anterior
         )
-        QShortcut(QKeySequence("Ctrl+G"), self, self._ir_a_pagina_dialogo)
-        QShortcut(QKeySequence.StandardKey.Print, self, self._imprimir)
-        QShortcut(QKeySequence("F11"), self, self._conmutar_pantalla_completa)
-        QShortcut(QKeySequence.StandardKey.Undo, self, self._deshacer)
-        QShortcut(QKeySequence.StandardKey.Redo, self, self._rehacer)
-        QShortcut(QKeySequence.StandardKey.ZoomIn, self, self._zoom_acercar)
-        QShortcut(QKeySequence.StandardKey.ZoomOut, self, self._zoom_alejar)
-        QShortcut(QKeySequence("Ctrl+0"), self, self._ajustar_pagina)
         QShortcut(QKeySequence.StandardKey.Close, self, self._cerrar_pestana_actual)
 
     def _construir_dock_miniaturas(self) -> None:
@@ -540,9 +534,6 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
         barra.addSeparator()
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
-        barra.addSeparator()
-        self._accion(barra, "Cambiar tema", self._conmutar_tema)
-        self._accion(barra, "Acerca de", self._mostrar_acerca_de)
         barra.addWidget(self._etiqueta_pagina)
         self._construir_barra_firma()
 
@@ -568,8 +559,88 @@ class MainWindow(QMainWindow):
         self._barra_firma.setVisible(self._colocando_firma())
 
     def _construir_menu(self) -> None:
+        # Barra de menús según el diseño Ladón: Archivo · Edición · Ver ·
+        # Documento · Firmas · Ayuda (no hay "Herramientas").
         self._construir_menu_archivo()
-        menu = self.menuBar().addMenu("Herramientas")
+        self._construir_menu_edicion()
+        self._construir_menu_ver()
+        self._construir_menu_documento()
+        self._construir_menu_firmas()
+        self._construir_menu_ayuda()
+
+    def _construir_menu_edicion(self) -> None:
+        menu = self.menuBar().addMenu("Edición")
+        self._accion_menu(menu, "Deshacer", self._deshacer, "Ctrl+Z")
+        self._accion_menu(menu, "Rehacer", self._rehacer, "Ctrl+Y")
+        menu.addSeparator()
+        self._accion_menu(menu, "Copiar", self._copiar_seleccion, "Ctrl+C")
+        self._accion_menu(menu, "Seleccionar todo", self._seleccionar_todo, "Ctrl+E")
+        menu.addSeparator()
+        self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
+        self._accion_menu(menu, "Ir a página…", self._ir_a_pagina_dialogo, "Ctrl+G")
+
+    def _construir_menu_ver(self) -> None:
+        menu = self.menuBar().addMenu("Ver")
+        # Una página / Doble página (radio exclusivo).
+        grupo = QActionGroup(self)
+        grupo.setExclusive(True)
+        self._accion_una_pagina = QAction("Una página", self)
+        self._accion_una_pagina.setCheckable(True)
+        self._accion_una_pagina.setShortcut(QKeySequence("Ctrl+1"))
+        self._accion_una_pagina.triggered.connect(lambda: self._set_doble(False))
+        self._accion_doble_pagina = QAction("Doble página", self)
+        self._accion_doble_pagina.setCheckable(True)
+        self._accion_doble_pagina.setShortcut(QKeySequence("Ctrl+2"))
+        self._accion_doble_pagina.triggered.connect(lambda: self._set_doble(True))
+        grupo.addAction(self._accion_una_pagina)
+        grupo.addAction(self._accion_doble_pagina)
+        menu.addAction(self._accion_una_pagina)
+        menu.addAction(self._accion_doble_pagina)
+        menu.addSeparator()
+        menu.addAction(self._accion_panel_miniaturas)  # F7
+        menu.addAction(self._accion_panel_indice)  # F8
+        menu.addSeparator()
+        self._accion_menu(menu, "Ajustar a ancho", self._ajustar_ancho, "Ctrl+3")
+        ajustar_pagina = self._accion_menu(
+            menu, "Ajustar a página", self._ajustar_pagina, "Ctrl+4"
+        )
+        ajustar_pagina.setShortcuts(  # Ctrl+0 como alias (estándar de visores)
+            [QKeySequence("Ctrl+4"), QKeySequence("Ctrl+0")]
+        )
+        self._accion_menu(menu, "Acercar", self._zoom_acercar, "Ctrl++")
+        self._accion_menu(menu, "Alejar", self._zoom_alejar, "Ctrl+-")
+        menu.addSeparator()
+        submenu = menu.addMenu("Rotar vista")
+        self._accion_menu(submenu, "Rotar a la derecha", self._rotar_derecha, "Ctrl+Shift+R")
+        self._accion_menu(submenu, "Rotar a la izquierda", self._rotar_izquierda, "Ctrl+Shift+L")
+        self._accion_menu(
+            menu, "Pantalla completa", self._conmutar_pantalla_completa, "F11"
+        )
+        presentacion = self._accion_menu(menu, "Presentación", lambda: None, "Shift+F5")
+        presentacion.setEnabled(False)  # fuera de alcance (como en el diseño)
+        menu.addSeparator()
+        self._construir_submenu_tema(menu)
+
+    def _construir_submenu_tema(self, menu: QMenu) -> None:
+        submenu = menu.addMenu("Tema")
+        grupo = QActionGroup(self)
+        grupo.setExclusive(True)
+        self._accion_tema_claro = QAction("Claro", self)
+        self._accion_tema_claro.setCheckable(True)
+        self._accion_tema_claro.triggered.connect(lambda: self._aplicar_tema(TEMA_CLARO))
+        self._accion_tema_oscuro = QAction("Oscuro", self)
+        self._accion_tema_oscuro.setCheckable(True)
+        self._accion_tema_oscuro.triggered.connect(
+            lambda: self._aplicar_tema(TEMA_OSCURO)
+        )
+        grupo.addAction(self._accion_tema_claro)
+        grupo.addAction(self._accion_tema_oscuro)
+        submenu.addAction(self._accion_tema_claro)
+        submenu.addAction(self._accion_tema_oscuro)
+        self._sincronizar_acciones_tema()
+
+    def _construir_menu_documento(self) -> None:
+        menu = self.menuBar().addMenu("Documento")
         self._accion_menu(menu, "Unir PDF…", self._menu_unir)
         self._accion_menu(menu, "Dividir PDF…", self._menu_dividir)
         menu.addSeparator()
@@ -580,6 +651,19 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Exportar a PNG…", self._menu_exportar_png)
         self._accion_menu(menu, "Exportar a texto…", self._menu_exportar_texto)
+        menu.addSeparator()
+        self._accion_menu(menu, "Propiedades del documento…", self._mostrar_propiedades)
+
+    def _construir_menu_firmas(self) -> None:
+        menu = self.menuBar().addMenu("Firmas")
+        self._accion_menu(menu, "Firmar (dibujar y estampar)…", self._iniciar_firma)
+        self._accion_menu(menu, "Firmar con certificado…", self._firmar_digitalmente)
+        menu.addSeparator()
+        self._accion_menu(menu, "Verificar firmas…", self._verificar_firmas)
+
+    def _construir_menu_ayuda(self) -> None:
+        menu = self.menuBar().addMenu("Ayuda")
+        self._accion_menu(menu, "Acerca de DracPDF", self._mostrar_acerca_de)
 
     def _construir_menu_archivo(self) -> None:
         menu = self.menuBar().addMenu("Archivo")
@@ -593,8 +677,6 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
         self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
-        menu.addSeparator()
-        self._accion_menu(menu, "Propiedades…", self._mostrar_propiedades)
         menu.addSeparator()
         accion_sesion = QAction("Restaurar sesión al arrancar", self)
         accion_sesion.setCheckable(True)
@@ -1171,10 +1253,18 @@ class MainWindow(QMainWindow):
         if ruta_str:
             self.abrir_ruta_con_aviso(Path(ruta_str))
 
-    def _conmutar_tema(self) -> None:
-        self._tema = TEMA_CLARO if self._tema.es_oscuro else TEMA_OSCURO
+    def _aplicar_tema(self, tema: Tema) -> None:
+        """Cambia al tema dado (menú Ver → Tema) y sincroniza las acciones."""
+        if tema is self._tema:
+            return
+        self._tema = tema
         guardar_preferencia_tema(self._tema.nombre)
         self._aplicar_tema_actual()
+        self._sincronizar_acciones_tema()
+
+    def _sincronizar_acciones_tema(self) -> None:
+        self._accion_tema_claro.setChecked(not self._tema.es_oscuro)
+        self._accion_tema_oscuro.setChecked(self._tema.es_oscuro)
 
     def _mostrar_acerca_de(self) -> None:
         AboutDialog(self._tema.es_oscuro, self).exec()
@@ -1210,10 +1300,25 @@ class MainWindow(QMainWindow):
 
     # -- Modos de vista -----------------------------------------------------
 
-    def _conmutar_doble(self, activado: bool) -> None:
+    def _set_doble(self, activado: bool) -> None:
+        """Fuente única del modo una/doble página: aplica a todas las vistas,
+        persiste y sincroniza los controles (radio del menú + botón de la barra)."""
         for vista in self._vistas():
             vista.visor.set_doble_pagina(activado)
         self._prefs.setValue(_CLAVE_DOBLE, activado)
+        self._sincronizar_doble(activado)
+
+    def _sincronizar_doble(self, activado: bool) -> None:
+        self._sincronizando_doble = True
+        self._accion_doble.setChecked(activado)
+        self._accion_una_pagina.setChecked(not activado)
+        self._accion_doble_pagina.setChecked(activado)
+        self._sincronizando_doble = False
+
+    def _conmutar_doble(self, activado: bool) -> None:
+        if self._sincronizando_doble:
+            return
+        self._set_doble(activado)
 
     def _conmutar_pantalla_completa(self) -> None:
         if self.isFullScreen():
