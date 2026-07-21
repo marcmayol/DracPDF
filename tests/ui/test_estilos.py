@@ -47,7 +47,32 @@ def test_qss_no_contiene_hex_ajenos_a_los_tokens() -> None:
         if isinstance(getattr(tokens.TEMA_OSCURO, c), str)
         and getattr(tokens.TEMA_OSCURO, c).startswith("#")
     }
+    # Los campos del overlay usan la paleta de documento fija (no del tema).
+    permitidos |= {
+        tokens.CAMPO_FONDO,
+        tokens.CAMPO_BORDE,
+        tokens.CAMPO_TEXTO,
+        tokens.CAMPO_SELECCION,
+    }
     assert hex_en_qss <= permitidos
+
+
+def _bloque_overlay(qss: str) -> str:
+    """Fragmento del QSS con el estilo de documento del overlay (último bloque)."""
+    return qss[qss.index("Overlay de formularios") :]
+
+
+def test_estilo_del_overlay_no_cambia_al_cambiar_de_tema() -> None:
+    oscuro = generar_qss(tokens.TEMA_OSCURO)
+    claro = generar_qss(tokens.TEMA_CLARO)
+
+    # El bloque del overlay es idéntico byte a byte en ambos temas.
+    assert _bloque_overlay(oscuro) == _bloque_overlay(claro)
+    # Y usa la paleta de documento fija, no colores del tema.
+    for qss in (oscuro, claro):
+        assert tokens.CAMPO_FONDO in qss
+        assert tokens.CAMPO_TEXTO in qss
+    assert tokens.TEMA_OSCURO.canvas not in _bloque_overlay(oscuro)
 
 
 def test_aplicar_tema_pone_el_stylesheet(qapp: object) -> None:

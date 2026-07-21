@@ -22,9 +22,17 @@ from lectorpdf.core.domain.formularios import CampoFormulario, TipoCampo
 _ESTADO_OFF = "Off"
 
 
+#: Propiedad dinámica que marca los widgets del overlay para darles estilo fijo
+#: de documento (papel) en el QSS, excluidos del tema de la app.
+PROP_CAMPO = "documentoCampo"
+
+
 def crear_widget(campo: CampoFormulario) -> QWidget:
     """Crea el widget Qt que representa `campo` con su valor actual."""
     widget = _crear(campo)
+    # El overlay va sobre el papel del documento: no debe seguir el tema de la
+    # app. Se marca para que el QSS le dé estilo de documento fijo.
+    widget.setProperty(PROP_CAMPO, "true")
     if campo.solo_lectura:
         widget.setEnabled(False)
     return widget

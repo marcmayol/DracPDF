@@ -15,7 +15,7 @@ from lectorpdf.core.domain.formularios import (
     RectanguloPt,
     TipoCampo,
 )
-from lectorpdf.ui.forms.widgets_campo import crear_widget
+from lectorpdf.ui.forms.widgets_campo import PROP_CAMPO, crear_widget
 
 _RECT = RectanguloPt(0, 0, 100, 20)
 
@@ -33,6 +33,13 @@ def test_texto_muestra_su_valor(qapp: object) -> None:
 
     assert isinstance(widget, QLineEdit)
     assert widget.text() == "Marc"
+
+
+def test_todos_los_campos_llevan_la_propiedad_de_documento(qapp: object) -> None:
+    # El overlay se marca para recibir estilo de documento fijo (no el tema).
+    for tipo in TipoCampo:
+        widget = crear_widget(_campo(tipo, opciones=("a", "b")))
+        assert widget.property(PROP_CAMPO) == "true"
 
 
 def test_casilla_marcada_si_valor_igual_al_estado_on(qapp: object) -> None:

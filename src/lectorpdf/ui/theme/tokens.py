@@ -72,6 +72,14 @@ PAPEL_BORDE = "#28000000"  # negro translúcido para el borde de página (AARRGG
 TINTA_FIRMA = "#111318"
 OVERLAY_FIRMA = "#E0534A"
 
+# Campos del overlay de formularios: estilo de documento FIJO (van sobre el papel
+# de la página, no sobre el chrome de la app), idéntico en ambos temas. No siguen
+# el tema porque el documento siempre es papel claro. No son tokens del diseño.
+CAMPO_FONDO = "#EAF1FB"  # tinte azul muy suave de campo rellenable
+CAMPO_BORDE = "#8FB0D9"  # borde azul acero tenue
+CAMPO_TEXTO = TINTA_FIRMA  # tinta oscura del documento
+CAMPO_SELECCION = "#5B86BD"  # azul acero (mismo que SELECCION_TEXTO) para la selección
+
 
 @dataclass(frozen=True)
 class ColorEscena:

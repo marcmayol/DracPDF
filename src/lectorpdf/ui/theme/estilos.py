@@ -14,6 +14,10 @@ from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
 from lectorpdf.ui.theme.tokens import (
+    CAMPO_BORDE,
+    CAMPO_FONDO,
+    CAMPO_SELECCION,
+    CAMPO_TEXTO,
     RADIOS,
     TEMA_POR_DEFECTO,
     TIPOGRAFIA,
@@ -150,6 +154,21 @@ QFrame[infoBanner="true"] QPushButton {
     background: transparent; border: 1px solid $banner_borde;
     color: $banner_text; padding: 2px 10px; border-radius: ${r_control}px;
 }
+
+/* Overlay de formularios: estilo de documento FIJO (papel), idéntico en ambos
+   temas. Los valores no dependen del tema (excluye estos widgets del chrome). */
+QLineEdit[documentoCampo="true"],
+QComboBox[documentoCampo="true"],
+QListWidget[documentoCampo="true"] {
+    background: $campo_fondo; color: $campo_texto;
+    border: 1px solid $campo_borde; border-radius: ${r_control}px;
+    selection-background-color: $campo_seleccion; selection-color: $campo_texto;
+}
+QLineEdit[documentoCampo="true"]:focus,
+QComboBox[documentoCampo="true"]:focus,
+QListWidget[documentoCampo="true"]:focus { border-color: $campo_seleccion; }
+QCheckBox[documentoCampo="true"],
+QRadioButton[documentoCampo="true"] { background: transparent; color: $campo_texto; }
 """
 )
 
@@ -184,6 +203,11 @@ def generar_qss(tema: Tema) -> str:
         banner_bg=rgba(tema.sig_unknown, 0.10),
         banner_borde=rgba(tema.sig_unknown, 0.35),
         banner_text=tema.sig_unknown,
+        # Campos del overlay: estilo de documento fijo, igual en ambos temas.
+        campo_fondo=CAMPO_FONDO,
+        campo_borde=CAMPO_BORDE,
+        campo_texto=CAMPO_TEXTO,
+        campo_seleccion=CAMPO_SELECCION,
     )
 
 
