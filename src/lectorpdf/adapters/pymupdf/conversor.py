@@ -97,6 +97,14 @@ class ConversorFitz:
                 progreso(i + 1, total)
         _escribir_texto_atomico(destino, "\n\n".join(partes) + "\n")
 
+    def es_escaneado(self, documento_id: str) -> bool:
+        """True si ninguna página tiene texto extraíble (PDF escaneado): la
+        conversión saldría vacía. Un documento sin páginas no es escaneado."""
+        doc = self._registro.obtener(documento_id)
+        if doc.page_count == 0:
+            return False
+        return all(not doc[i].get_text("text").strip() for i in range(doc.page_count))
+
 
 def _envolver_html(paginas: list[str], titulo: str) -> str:
     """Envuelve el HTML por página (que fitz da como fragmentos) en un documento

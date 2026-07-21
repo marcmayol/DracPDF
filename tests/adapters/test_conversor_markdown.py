@@ -45,3 +45,13 @@ def test_a_markdown_sin_texto_queda_practicamente_vacio(
 
     # Un escaneo sin capa de texto no produce contenido (solo el salto final).
     assert destino.read_text(encoding="utf-8").strip() == ""
+
+
+def test_es_escaneado_detecta_pdf_sin_texto(
+    pdf_escaneado: Path, pdf_titulos_tabla: Path
+) -> None:
+    conv_esc, id_esc = _abrir(pdf_escaneado)
+    assert conv_esc.es_escaneado(id_esc) is True
+
+    conv_txt, id_txt = _abrir(pdf_titulos_tabla)
+    assert conv_txt.es_escaneado(id_txt) is False
