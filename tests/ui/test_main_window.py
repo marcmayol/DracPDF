@@ -586,3 +586,26 @@ def test_cerrar_pestana_actual_deja_una_vacia(qapp: object, tmp_path: Path) -> N
         assert ventana._documento is None
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_barra_firma_es_contextual_del_modo_colocacion(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=2))
+        doc = ventana._documento
+        assert doc is not None
+
+        # Oculta por defecto (fuera del modo colocación).
+        assert ventana._barra_firma.isHidden()
+
+        png = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 100, 40), False).tobytes("png")
+        ventana._capa_firma.iniciar_colocacion(doc, png)
+        ventana._actualizar_controles_firma()
+        assert not ventana._barra_firma.isHidden()  # visible al colocar
+
+        ventana._cancelar_colocacion()
+        assert ventana._barra_firma.isHidden()  # vuelve a ocultarse
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)

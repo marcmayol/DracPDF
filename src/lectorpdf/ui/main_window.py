@@ -482,14 +482,34 @@ class MainWindow(QMainWindow):
         barra.addSeparator()
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
-        self._accion(barra, "✓ Colocar", self._confirmar_firma)
-        self._accion(barra, "✗ Cancelar", self._cancelar_colocacion)
         barra.addSeparator()
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
         barra.addSeparator()
         self._accion(barra, "Cambiar tema", self._conmutar_tema)
         self._accion(barra, "Acerca de", self._mostrar_acerca_de)
         barra.addWidget(self._etiqueta_pagina)
+        self._construir_barra_firma()
+
+    def _construir_barra_firma(self) -> None:
+        """Barra contextual del modo de colocación de firma: oculta por defecto,
+        visible solo mientras se coloca (no reflowa la barra principal)."""
+        self.addToolBarBreak()
+        self._barra_firma = QToolBar("Colocación de firma", self)
+        self.addToolBar(self._barra_firma)
+        self._accion_colocar = QAction("✓ Colocar", self)
+        self._accion_colocar.triggered.connect(self._confirmar_firma)
+        self._accion_cancelar = QAction("✗ Cancelar", self)
+        self._accion_cancelar.triggered.connect(self._cancelar_colocacion)
+        self._barra_firma.addAction(self._accion_colocar)
+        self._barra_firma.addAction(self._accion_cancelar)
+        self._barra_firma.setVisible(False)  # solo en modo colocación
+
+    def _colocando_firma(self) -> bool:
+        return self._capa_firma.colocando() or self._capa_sello.colocando()
+
+    def _actualizar_controles_firma(self) -> None:
+        """Muestra la barra contextual solo mientras se coloca una firma/sello."""
+        self._barra_firma.setVisible(self._colocando_firma())
 
     def _construir_menu(self) -> None:
         self._construir_menu_archivo()
@@ -757,6 +777,7 @@ class MainWindow(QMainWindow):
         png = dialogo.png()
         if png:
             self._capa_firma.iniciar_colocacion(self._documento, png)
+            self._actualizar_controles_firma()  # entra en modo colocación
 
     def _confirmar_firma(self) -> None:
         if self._capa_sello.colocando():
@@ -766,15 +787,18 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "No se pudo firmar", str(exc))
                 return
             self._tras_firmar()
+            self._actualizar_controles_firma()
             return
         try:
             self._capa_firma.confirmar()
         except ErrorDominio as exc:
             QMessageBox.warning(self, "No se pudo estampar la firma", str(exc))
+        self._actualizar_controles_firma()
 
     def _cancelar_colocacion(self) -> None:
         self._capa_firma.cancelar()
         self._capa_sello.cancelar()
+        self._actualizar_controles_firma()
 
     def _firmar_digitalmente(self) -> None:
         if self._documento is None:
@@ -795,6 +819,7 @@ class MainWindow(QMainWindow):
             self._capa_sello.iniciar_colocacion(
                 self._documento, credencial, dialogo.razon()
             )
+            self._actualizar_controles_firma()  # entra en modo colocación
             return
         # Firma invisible: en la página actual, sin sello.
         config = ConfigFirma(pagina=self._visor.pagina_actual(), razon=dialogo.razon())
