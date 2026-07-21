@@ -267,3 +267,43 @@ class FakeServicioBusqueda:
             progreso(1, 1)
         self.llamadas.append((documento_id, termino, coincidir_mayusculas))
         return self._coincidencias
+
+
+class FakeConversorPDF:
+    """Fake en memoria de `ConversorPDF`. Registra las llamadas."""
+
+    def __init__(self, escaneado: bool = False) -> None:
+        self._escaneado = escaneado
+        self.word: list[tuple[str, Path, Rango | None]] = []
+        self.html: list[tuple[str, Path, Rango | None, bool]] = []
+        self.markdown: list[tuple[str, Path, Rango | None]] = []
+
+    def a_word(self, documento_id, destino, rango=None, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.word.append((documento_id, destino, rango))
+
+    def a_html(self, documento_id, destino, rango=None, imagenes_embebidas=True, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.html.append((documento_id, destino, rango, imagenes_embebidas))
+
+    def a_markdown(self, documento_id, destino, rango=None, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.markdown.append((documento_id, destino, rango))
+
+    def es_escaneado(self, documento_id: str) -> bool:
+        return self._escaneado
+
+
+class FakeConversorWord:
+    """Fake en memoria de `ConversorWord`. Registra las conversiones."""
+
+    def __init__(self) -> None:
+        self.conversiones: list[tuple[Path, Path]] = []
+
+    def a_pdf(self, ruta_docx, destino, config, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.conversiones.append((ruta_docx, destino))
