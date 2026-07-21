@@ -26,8 +26,11 @@ from lectorpdf.ui.theme.tokens import (
     tema_por_nombre,
 )
 
-_ORG = "lectorpdf"
-_APP = "lectorpdf"
+# Identidad única de QSettings (org, app). Se fija también en la QApplication al
+# arrancar (app.py) para que TODA preferencia use el mismo almacén, en desarrollo
+# y en el .exe. No cambiar sin migrar los ajustes existentes de los usuarios.
+AJUSTES_ORG = "lectorpdf"
+AJUSTES_APP = "lectorpdf"
 _CLAVE_TEMA = "ui/tema"
 
 _PLANTILLA = Template(
@@ -262,9 +265,9 @@ def aplicar_tema(app: QApplication, tema: Tema) -> None:
 
 
 def guardar_preferencia_tema(nombre: str) -> None:
-    QSettings(_ORG, _APP).setValue(_CLAVE_TEMA, nombre)
+    QSettings(AJUSTES_ORG, AJUSTES_APP).setValue(_CLAVE_TEMA, nombre)
 
 
 def cargar_tema_preferido() -> Tema:
-    nombre = QSettings(_ORG, _APP).value(_CLAVE_TEMA, TEMA_POR_DEFECTO.nombre)
+    nombre = QSettings(AJUSTES_ORG, AJUSTES_APP).value(_CLAVE_TEMA, TEMA_POR_DEFECTO.nombre)
     return tema_por_nombre(str(nombre))

@@ -11,7 +11,12 @@ from PySide6.QtWidgets import QApplication
 
 from lectorpdf.ui.instancia_unica import InstanciaUnica, nombre_servidor
 from lectorpdf.ui.main_window import MainWindow
-from lectorpdf.ui.theme.estilos import aplicar_tema, cargar_tema_preferido
+from lectorpdf.ui.theme.estilos import (
+    AJUSTES_APP,
+    AJUSTES_ORG,
+    aplicar_tema,
+    cargar_tema_preferido,
+)
 from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
 
 
@@ -33,7 +38,12 @@ def cargar_traducciones(app: QApplication) -> list[QTranslator]:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     app = QApplication(argv)
-    app.setApplicationName(NOMBRE_APP)
+    # Identidad para QSettings fijada ANTES de cualquier lectura de ajustes e
+    # idéntica en desarrollo y en el .exe: todas las preferencias (tema, sesión,
+    # recientes, vista) usan siempre el mismo almacén. Las claves emplean además
+    # QSettings(AJUSTES_ORG, AJUSTES_APP) explícito con estos mismos valores.
+    app.setOrganizationName(AJUSTES_ORG)
+    app.setApplicationName(AJUSTES_APP)
     app.setApplicationDisplayName(NOMBRE_APP)
     cargar_traducciones(app)  # OK/Cancel/Close… en español
 

@@ -113,6 +113,8 @@ from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.tareas import ResultadoTarea, ejecutar_con_progreso
 from lectorpdf.ui.theme.barra_titulo import aplicar_modo_oscuro, instalar_gestor
 from lectorpdf.ui.theme.estilos import (
+    AJUSTES_APP,
+    AJUSTES_ORG,
     aplicar_tema,
     cargar_tema_preferido,
     guardar_preferencia_tema,
@@ -125,8 +127,6 @@ from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 from lectorpdf.ui.vista_documento import VistaDocumento
 
 _TITULO_BASE = NOMBRE_APP
-_ORG = "lectorpdf"
-_APP = "lectorpdf"
 _CLAVE_DOBLE = "vista/doble_pagina"
 _CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
 _CLAVE_RECIENTES = "archivo/recientes"
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         self._word_a_pdf = ConvertirWordAPdf(self._conversor_word)
 
         self._tema = cargar_tema_preferido()
-        self._prefs = QSettings(_ORG, _APP)
+        self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
         self._acciones_icono: list[tuple[QAction, str]] = []
         self._sincronizando_doble = False  # evita recursión al sincronizar radios
         # Sincroniza la barra de título nativa (Windows) con el tema en cada
