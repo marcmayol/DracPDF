@@ -7,8 +7,8 @@ panel, para no renderizar cientos de páginas al abrir el documento.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMenu
+from PySide6.QtGui import QIcon, QResizeEvent
+from PySide6.QtWidgets import QListView, QListWidget, QListWidgetItem, QMenu
 
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
@@ -37,7 +37,14 @@ class ThumbnailPanel(QListWidget):
         self.setIconSize(QSize(ANCHO_MINIATURA_PT_A_PX, int(ANCHO_MINIATURA_PT_A_PX * 1.5)))
         self.setSpacing(4)
         self.setUniformItemSizes(False)
-        self.setMaximumWidth(ANCHO_MINIATURA_PT_A_PX + 70)
+        # Columna única con la miniatura centrada (IconMode: icono arriba, número
+        # debajo). La lista ocupa todo el ancho del dock: sin franja lateral que
+        # deje asomar el contenedor. El ancho de cada item se ajusta al viewport.
+        self.setViewMode(QListView.ViewMode.IconMode)
+        self.setFlow(QListView.Flow.TopToBottom)
+        self.setWrapping(False)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setMovement(QListView.Movement.Static)
 
         self.currentRowChanged.connect(self._on_fila_cambiada)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -50,15 +57,30 @@ class ThumbnailPanel(QListWidget):
         self._documento = documento
         self._renderizadas.clear()
         self.clear()
+        ancho = self._ancho_item()
         for pagina in documento.paginas:
             item = QListWidgetItem(str(pagina.indice + 1))
             item.setData(_ROL_INDICE, pagina.indice)
             item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             # Reserva espacio para que el scroll conozca el tamaño sin renderizar.
             alto = int(pagina.alto_pt / pagina.ancho_pt * ANCHO_MINIATURA_PT_A_PX)
-            item.setSizeHint(QSize(ANCHO_MINIATURA_PT_A_PX + 40, alto + 24))
+            item.setSizeHint(QSize(ancho, alto + 24))
             self.addItem(item)
         self._render_visibles()
+
+    def _ancho_item(self) -> int:
+        """Ancho de cada item = ancho del viewport (miniatura centrada), con un
+        mínimo por si aún no se ha dispuesto el widget."""
+        return max(self.viewport().width(), ANCHO_MINIATURA_PT_A_PX + 40)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        ancho = self._ancho_item()
+        for fila in range(self.count()):
+            item = self.item(fila)
+            if item is not None:
+                actual = item.sizeHint()
+                item.setSizeHint(QSize(ancho, actual.height()))
 
     def limpiar(self) -> None:
         """Vacía el panel (pestaña sin documento)."""

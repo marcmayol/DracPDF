@@ -141,6 +141,10 @@ QTabBar::tab {
 }
 QTabBar::tab:selected { color: $text; border-bottom: 2px solid $accent; }
 QTabBar::tab:hover:!selected { color: $text; }
+/* Panel del QTabWidget (docks Miniaturas/Índice): que el contenedor use la
+   superficie del tema y no exponga la paleta por defecto en los bordes/franjas. */
+QTabWidget::pane { border: none; background: $surface; }
+QStackedWidget { background: $surface; }
 QTreeView::item { height: 24px; border-radius: ${r_control}px; padding: 0 4px; }
 QTreeView::item:hover { background: $surface_2; }
 QTreeView::item:selected { background: $accent_30; color: $text; }
