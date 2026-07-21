@@ -24,11 +24,19 @@ def _generar_icono() -> None:
         raise SystemExit("No se pudo generar el icono (falta la marca).")
 
 
+def _dir_traducciones() -> Path:
+    """Directorio de traducciones .qm de PySide6 (qtbase_es, qt_es…)."""
+    import PySide6  # noqa: PLC0415
+
+    return Path(PySide6.__file__).resolve().parent / "translations"
+
+
 def main() -> int:
     sys.path.insert(0, str(RAIZ / "scripts"))
     _generar_icono()
 
     ico = RAIZ / "build" / "icons" / "ladon.ico"
+    trad = _dir_traducciones()
     sep = ";" if sys.platform == "win32" else ":"
     orden = [
         "pyinstaller",
@@ -46,6 +54,11 @@ def main() -> int:
         f"{RAIZ / 'assets'}{sep}assets",
         "--add-data",
         f"{ico.parent}{sep}build/icons",
+        # Traducciones estándar de Qt en español (OK/Cancel/Close…).
+        "--add-data",
+        f"{trad / 'qtbase_es.qm'}{sep}PySide6/translations",
+        "--add-data",
+        f"{trad / 'qt_es.qm'}{sep}PySide6/translations",
         "--collect-submodules",
         "pyhanko",
         "--collect-submodules",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QLibraryInfo, QTranslator
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -14,11 +15,27 @@ from lectorpdf.ui.theme.estilos import aplicar_tema, cargar_tema_preferido
 from lectorpdf.ui.theme.marca import NOMBRE_APP, ruta_icono_app
 
 
+def cargar_traducciones(app: QApplication) -> list[QTranslator]:
+    """Instala las traducciones estándar de Qt en español (OK/Cancel/Close…).
+
+    Devuelve los traductores instalados (parentados a la app para mantenerlos
+    vivos); lista vacía si los .qm no están disponibles."""
+    ruta = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    traductores: list[QTranslator] = []
+    for nombre in ("qtbase_es", "qt_es"):
+        traductor = QTranslator(app)
+        if traductor.load(nombre, ruta):
+            app.installTranslator(traductor)
+            traductores.append(traductor)
+    return traductores
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     app = QApplication(argv)
     app.setApplicationName(NOMBRE_APP)
     app.setApplicationDisplayName(NOMBRE_APP)
+    cargar_traducciones(app)  # OK/Cancel/Close… en español
 
     # Instancia única: si ya hay una corriendo, le pasamos el documento y salimos.
     ruta_arg = argv[1] if len(argv) > 1 else ""
