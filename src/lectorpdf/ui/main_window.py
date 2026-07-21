@@ -99,6 +99,7 @@ from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.tareas import ResultadoTarea, ejecutar_con_progreso
+from lectorpdf.ui.theme.barra_titulo import aplicar_modo_oscuro, instalar_gestor
 from lectorpdf.ui.theme.estilos import (
     aplicar_tema,
     cargar_tema_preferido,
@@ -175,6 +176,12 @@ class MainWindow(QMainWindow):
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(_ORG, _APP)
         self._acciones_icono: list[tuple[QAction, str]] = []
+        # Sincroniza la barra de título nativa (Windows) con el tema en cada
+        # ventana que se muestre (principal, diálogos, mensajes). Un único gestor
+        # por QApplication (no acumula filtros al crear varias ventanas).
+        app_inicial = QApplication.instance()
+        assert isinstance(app_inicial, QApplication)  # siempre hay QApplication
+        self._gestor_barra = instalar_gestor(app_inicial, self._tema.es_oscuro)
 
         self._miniaturas = ThumbnailPanel(self._renderizar)
         self._outline = OutlinePanel()
@@ -216,6 +223,9 @@ class MainWindow(QMainWindow):
             vista.recolorear(self._tema.text)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
+        # Barra de título nativa: la ventana ahora, y las futuras vía el gestor.
+        self._gestor_barra.set_oscuro(self._tema.es_oscuro)
+        aplicar_modo_oscuro(self, self._tema.es_oscuro)
 
     # -- Proxies a la vista (pestaña) activa --------------------------------
 
