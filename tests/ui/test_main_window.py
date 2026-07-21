@@ -644,3 +644,99 @@ def test_toggles_de_paneles_muestran_y_ocultan_el_dock(
         assert ventana._accion_panel_indice.isChecked() is False
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+# -- Conversiones de formato (Fase 7) ---------------------------------------
+
+
+def test_convertir_deshabilitado_sin_documento_y_habilitado_al_abrir(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        assert ventana._accion_convertir_word.isEnabled() is False
+        assert ventana._accion_convertir_html.isEnabled() is False
+        assert ventana._accion_convertir_md.isEnabled() is False
+
+        ventana.abrir_ruta(_pdf(tmp_path))
+        assert ventana._accion_convertir_word.isEnabled() is True
+        assert ventana._accion_convertir_md.isEnabled() is True
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_convertir_a_markdown_produce_fichero(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "contenido.pdf"))
+        destino = tmp_path / "salida.md"
+
+        class _DialogoFalso:
+            def __init__(self, *a: object, **k: object) -> None:
+                pass
+
+            def exec(self) -> int:
+                from PySide6.QtWidgets import QDialog
+
+                return QDialog.DialogCode.Accepted
+
+            def rango(self) -> None:
+                return None
+
+            def imagenes_embebidas(self) -> bool:
+                return True
+
+        monkeypatch.setattr(mw, "ConversionSalienteDialog", _DialogoFalso)
+        monkeypatch.setattr(
+            mw.QFileDialog, "getSaveFileName", lambda *a, **k: (str(destino), "")
+        )
+        monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: None)
+
+        ventana._convertir_a_markdown()
+
+        assert destino.is_file()
+        assert "Ladon" in destino.read_text(encoding="utf-8")
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_convertir_word_a_pdf_produce_pdf(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.adapters.generar_fixtures_docx import generar_docx_prueba
+
+    ventana = MainWindow()
+    try:
+        docx = generar_docx_prueba(tmp_path / "prueba.docx")
+        destino = tmp_path / "salida.pdf"
+
+        monkeypatch.setattr(
+            mw.QFileDialog, "getOpenFileName", lambda *a, **k: (str(docx), "")
+        )
+        monkeypatch.setattr(
+            mw.QFileDialog, "getSaveFileName", lambda *a, **k: (str(destino), "")
+        )
+        monkeypatch.setattr(
+            mw.ConversionWordDialog,
+            "exec",
+            lambda self: __import__(
+                "PySide6.QtWidgets", fromlist=["QDialog"]
+            ).QDialog.DialogCode.Accepted,
+        )
+        # No abrir el PDF resultante al terminar.
+        monkeypatch.setattr(
+            mw.QMessageBox,
+            "question",
+            lambda *a, **k: mw.QMessageBox.StandardButton.No,
+        )
+
+        ventana._convertir_word_a_pdf()
+
+        assert destino.is_file()
+        doc = fitz.open(destino)
+        assert doc.page_count >= 1
+        doc.close()
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)

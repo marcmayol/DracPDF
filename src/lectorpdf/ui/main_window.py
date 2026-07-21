@@ -45,11 +45,13 @@ from PySide6.QtWidgets import (
 
 from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
 from lectorpdf.adapters.pymupdf.contenido import PyMuPDFContenido
+from lectorpdf.adapters.pymupdf.conversor import ConversorFitz
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
 from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
@@ -58,8 +60,10 @@ from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
+from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
+from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, ExportarImagenes
 from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
@@ -82,6 +86,8 @@ from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.banda_firmado import BandaFirmado
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
+from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
+from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
@@ -150,6 +156,8 @@ class MainWindow(QMainWindow):
         self._servicio_firma = PyHankoSignatureService(self._registro)
         self._servicio_herr = PyMuPDFHerramientas(self._registro)
         self._servicio_contenido = PyMuPDFContenido(self._registro)
+        self._conversor = ConversorFitz(self._registro)
+        self._conversor_word = ConversorWordQt()
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -173,6 +181,8 @@ class MainWindow(QMainWindow):
         self._obtener_indice = ObtenerIndice(self._servicio_contenido)
         self._obtener_enlaces = ObtenerEnlaces(self._servicio_contenido)
         self._obtener_propiedades = ObtenerPropiedades(self._servicio_contenido)
+        self._es_escaneado = EsPdfEscaneado(self._conversor)
+        self._word_a_pdf = ConvertirWordAPdf(self._conversor_word)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(_ORG, _APP)
@@ -406,6 +416,7 @@ class MainWindow(QMainWindow):
             return
         vista = self._vista()
         doc = vista.documento
+        self._actualizar_acciones_documento()  # habilita conversiones según haya doc
         if doc is None:
             self._miniaturas.limpiar()
             self._outline.set_entradas(())
@@ -655,6 +666,16 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Exportar a PNG…", self._menu_exportar_png)
         self._accion_menu(menu, "Exportar a texto…", self._menu_exportar_texto)
+        submenu = menu.addMenu("Convertir")
+        self._accion_convertir_word = self._accion_menu(
+            submenu, "A Word…", self._convertir_a_word
+        )
+        self._accion_convertir_html = self._accion_menu(
+            submenu, "A HTML…", self._convertir_a_html
+        )
+        self._accion_convertir_md = self._accion_menu(
+            submenu, "A Markdown…", self._convertir_a_markdown
+        )
         menu.addSeparator()
         self._accion_menu(menu, "Propiedades del documento…", self._mostrar_propiedades)
 
@@ -681,6 +702,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
         self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
+        menu.addSeparator()
+        self._accion_menu(
+            menu, "Convertir Word a PDF (reformateado)…", self._convertir_word_a_pdf
+        )
         menu.addSeparator()
         accion_sesion = QAction("Restaurar sesión al arrancar", self)
         accion_sesion.setCheckable(True)
@@ -796,6 +821,7 @@ class MainWindow(QMainWindow):
         self._cargar_formulario(documento)
         self._cargar_indice(documento)
         self._actualizar_banda_firmado()
+        self._actualizar_acciones_documento()
         self._registrar_reciente(ruta)
         self._restaurar_estado_documento(documento, vista)
         nombre = documento.titulo or ruta.name
@@ -1240,6 +1266,129 @@ class MainWindow(QMainWindow):
             self, "Exportando texto…", lambda p: self._exportar_texto.ejecutar(doc, destino)
         )
         self._tras_tarea(res, f"Texto exportado a:\n{destino}")
+
+    # -- Conversiones de formato (Fase 7) -----------------------------------
+
+    def _actualizar_acciones_documento(self) -> None:
+        """Habilita las conversiones salientes solo con un documento abierto."""
+        hay = self._documento is not None
+        for accion in (
+            self._accion_convertir_word,
+            self._accion_convertir_html,
+            self._accion_convertir_md,
+        ):
+            accion.setEnabled(hay)
+
+    def _convertir_a_word(self) -> None:
+        self._convertir_saliente(
+            "Convertir a Word",
+            "docx",
+            "Documento Word (*.docx)",
+            con_imagenes=False,
+            operacion=lambda conv, doc_id, dst, r, _i, p: conv.a_word(doc_id, dst, r, p),
+        )
+
+    def _convertir_a_html(self) -> None:
+        self._convertir_saliente(
+            "Convertir a HTML",
+            "html",
+            "Página web (*.html)",
+            con_imagenes=True,
+            operacion=lambda conv, doc_id, dst, r, i, p: conv.a_html(doc_id, dst, r, i, p),
+        )
+
+    def _convertir_a_markdown(self) -> None:
+        self._convertir_saliente(
+            "Convertir a Markdown",
+            "md",
+            "Markdown (*.md)",
+            con_imagenes=False,
+            operacion=lambda conv, doc_id, dst, r, _i, p: conv.a_markdown(doc_id, dst, r, p),
+        )
+
+    def _convertir_saliente(
+        self,
+        titulo: str,
+        extension: str,
+        filtro: str,
+        con_imagenes: bool,
+        operacion: Callable[..., None],
+    ) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        if self._es_escaneado.ejecutar(doc) and not self._confirmar_escaneado(titulo):
+            return
+        dialogo = ConversionSalienteDialog(titulo, doc.num_paginas, con_imagenes, self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            rango = dialogo.rango()
+        except ValueError:
+            QMessageBox.warning(self, titulo, "Rango de páginas inválido.")
+            return
+        imagenes = dialogo.imagenes_embebidas()
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, titulo, f"{doc.ruta.stem}.{extension}", filtro
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self,
+            f"{titulo}…",
+            lambda p: operacion(self._conversor, doc.id, destino, rango, imagenes, p),
+        )
+        self._tras_tarea(res, f"Guardado en:\n{destino}")
+
+    def _confirmar_escaneado(self, titulo: str) -> bool:
+        respuesta = QMessageBox.question(
+            self,
+            titulo,
+            "Este PDF parece escaneado (sin capa de texto): la conversión saldría "
+            "vacía o sin texto. No hay OCR en esta versión. ¿Continuar de todos modos?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        return respuesta == QMessageBox.StandardButton.Yes
+
+    def _convertir_word_a_pdf(self) -> None:
+        ruta_str, _ = QFileDialog.getOpenFileName(
+            self, "Elegir documento Word", "", "Documento Word (*.docx)"
+        )
+        if not ruta_str:
+            return
+        ruta = Path(ruta_str)
+        dialogo = ConversionWordDialog(self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        config = dialogo.config()
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF", f"{ruta.stem}.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        # Word→PDF usa QTextDocument/QPdfWriter (GUI): debe correr en el hilo
+        # principal, no en el worker. Es rápido; se muestra el cursor de espera.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        error: Exception | None = None
+        try:
+            self._word_a_pdf.ejecutar(ruta, destino, config)
+        except Exception as exc:  # errores de mammoth/Qt al convertir
+            error = exc
+        finally:
+            QApplication.restoreOverrideCursor()
+        if error is not None:
+            QMessageBox.warning(self, "No se pudo convertir", str(error))
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Conversión completada",
+            f"PDF guardado en:\n{destino}\n\n¿Abrirlo ahora?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if respuesta == QMessageBox.StandardButton.Yes:
+            self.abrir_ruta_con_aviso(destino)
 
     def abrir_ruta_con_aviso(self, ruta: Path) -> bool:
         """Abre `ruta` mostrando un aviso si falla, en vez de propagar el error."""
