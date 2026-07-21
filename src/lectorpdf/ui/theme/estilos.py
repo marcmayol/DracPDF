@@ -56,6 +56,9 @@ QToolButton:hover { background: $surface_2; }
 QToolButton:pressed { background: $border; }
 QToolButton:checked { background: $accent_30; color: $accent; }
 QToolButton:disabled { color: $text_muted; }
+/* "Firmar con certificado": acción destacada del grupo de firma (maqueta 5.1). */
+QToolButton#botonFirmar { background: $accent_18; }
+QToolButton#botonFirmar:hover { background: $accent_30; }
 
 QPushButton {
     background: $surface_2; color: $text;
@@ -191,6 +194,7 @@ def generar_qss(tema: Tema) -> str:
         accent_hover=tema.accent_hover,
         on_accent=tema.on_accent,
         accent_30=rgba(tema.accent, 0.30),
+        accent_18=rgba(tema.accent, 0.18),
         sig_valid=tema.sig_valid,
         sig_invalid=tema.sig_invalid,
         sig_unknown=tema.sig_unknown,

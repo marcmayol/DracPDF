@@ -61,6 +61,15 @@ class FormLayer:
     def proxies(self) -> dict[str, QGraphicsProxyWidget]:
         return dict(self._proxies)
 
+    def tiene_campos(self) -> bool:
+        return bool(self._campos_por_pagina)
+
+    def primera_pagina_con_campo(self) -> int | None:
+        """Página (0-based) más temprana con algún campo, o None si no hay."""
+        if not self._campos_por_pagina:
+            return None
+        return min(self._campos_por_pagina)
+
     # -- Sincronización -----------------------------------------------------
 
     def _al_reconstruir_escena(self) -> None:

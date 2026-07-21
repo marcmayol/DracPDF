@@ -772,3 +772,29 @@ def test_control_zoom_ajusta_escala_al_escribir(qapp: object, tmp_path: Path) ->
         assert ventana._control_zoom._campo.text() == "75"
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_boton_firmar_destacado_con_objectname(qapp: object) -> None:
+    # El botón "Firmar con certificado" lleva objectName para el QSS de acento.
+    ventana = MainWindow()
+    try:
+        barra = ventana.findChildren(mw.QToolBar)[0]
+        boton = barra.widgetForAction(ventana._accion_firmar)
+        assert boton is not None
+        assert boton.objectName() == "botonFirmar"
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_boton_formulario_se_habilita_solo_con_campos(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        assert ventana._accion_form.isEnabled() is False  # sin documento
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=2))  # PDF sin campos
+        assert ventana._accion_form.isEnabled() is False
+        ventana.abrir_ruta(generar_formulario_completo(tmp_path / "f.pdf"))
+        assert ventana._accion_form.isEnabled() is True
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)

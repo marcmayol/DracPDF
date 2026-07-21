@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QSizePolicy,
     QTabWidget,
     QToolBar,
     QWidget,
@@ -237,6 +238,8 @@ class MainWindow(QMainWindow):
             vista.recolorear(self._tema.text)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
+        # "Firmar" va en color de acento, no en el de texto (grupo de firma).
+        self._accion_firmar.setIcon(icono("sign-cert", self._tema.accent))
         self._control_pagina.recolorear(self._tema.text)
         self._control_zoom.recolorear(self._tema.text)
         # Barra de título nativa: la ventana ahora, y las futuras vía el gestor.
@@ -555,9 +558,29 @@ class MainWindow(QMainWindow):
         self._control_zoom.acercar.connect(self._zoom_acercar)
         self._control_zoom.zoom_pedido.connect(lambda f: self._visor.set_escala(f))
         barra.addWidget(self._control_zoom)
-        barra.addSeparator()
+
+        # Grupo de firma alineado a la derecha (margin-left:auto de la maqueta 5.1):
+        # rellenar formulario · dibujar firma · firmar (destacado) · verificar.
+        espaciador = QWidget()
+        espaciador.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        barra.addWidget(espaciador)
+        self._accion_form = self._accion_icono(
+            barra, "form-fill", "Ir al formulario", self._ir_al_formulario
+        )
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
-        self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
+        # "Firmar con certificado": icono en color de acento (no en el color de texto
+        # como el resto), botón con fondo de acento vía QSS (#botonFirmar).
+        self._accion_firmar = QAction(
+            icono("sign-cert", self._tema.accent), "Firmar con certificado", self
+        )
+        self._accion_firmar.setToolTip("Firmar con certificado")
+        self._accion_firmar.triggered.connect(self._firmar_digitalmente)
+        barra.addAction(self._accion_firmar)
+        boton_firmar = barra.widgetForAction(self._accion_firmar)
+        if boton_firmar is not None:
+            boton_firmar.setObjectName("botonFirmar")
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
         self._construir_barra_firma()
 
@@ -757,12 +780,13 @@ class MainWindow(QMainWindow):
         nombre_icono: str,
         tooltip: str,
         callback: Callable[[], None],
-    ) -> None:
+    ) -> QAction:
         accion = QAction(icono(nombre_icono, self._tema.text), tooltip, self)
         accion.setToolTip(tooltip)
         accion.triggered.connect(callback)
         barra.addAction(accion)
         self._acciones_icono.append((accion, nombre_icono))
+        return accion
 
     def _accion_conmutable(
         self,
@@ -1293,6 +1317,13 @@ class MainWindow(QMainWindow):
             self._accion_convertir_md,
         ):
             accion.setEnabled(hay)
+        self._accion_form.setEnabled(hay and self._capa_form.tiene_campos())
+
+    def _ir_al_formulario(self) -> None:
+        """Salta a la primera página con campos de formulario."""
+        pagina = self._capa_form.primera_pagina_con_campo()
+        if pagina is not None:
+            self._visor.ir_a_pagina(pagina)
 
     def _convertir_a_word(self) -> None:
         self._convertir_saliente(
