@@ -86,6 +86,7 @@ from lectorpdf.ui.about_dialog import AboutDialog
 from lectorpdf.ui.banda_firmado import BandaFirmado
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
+from lectorpdf.ui.controles.control_pagina import ControlPagina
 from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
 from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
@@ -235,6 +236,7 @@ class MainWindow(QMainWindow):
             vista.recolorear(self._tema.text)
         for accion, nombre_icono in self._acciones_icono:
             accion.setIcon(icono(nombre_icono, self._tema.text))
+        self._control_pagina.recolorear(self._tema.text)
         # Barra de título nativa: la ventana ahora, y las futuras vía el gestor.
         self._gestor_barra.set_oscuro(self._tema.es_oscuro)
         aplicar_modo_oscuro(self, self._tema.es_oscuro)
@@ -423,6 +425,7 @@ class MainWindow(QMainWindow):
             self._panel_lateral.setTabVisible(self._idx_tab_indice, False)
             self.setWindowTitle(_TITULO_BASE)
             self._etiqueta_pagina.setText("—")
+            self._control_pagina.set_estado(0, 0)
             return
         self._miniaturas.set_documento(doc)
         self._miniaturas.seleccionar_pagina(vista.visor.pagina_actual())
@@ -531,8 +534,11 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "open", "Abrir…", self._abrir_por_dialogo)
         self._accion_icono(barra, "save", "Guardar", self._guardar)
         barra.addSeparator()
-        self._accion_icono(barra, "page-prev", "Página anterior", self._pagina_anterior)
-        self._accion_icono(barra, "page-next", "Página siguiente", self._pagina_siguiente)
+        self._control_pagina = ControlPagina()
+        self._control_pagina.anterior.connect(self._pagina_anterior)
+        self._control_pagina.siguiente.connect(self._pagina_siguiente)
+        self._control_pagina.pagina_pedida.connect(self._ir_a_pagina_activa)
+        barra.addWidget(self._control_pagina)
         barra.addSeparator()
         self._accion_icono(barra, "zoom-out", "Alejar", self._zoom_alejar)
         self._accion_icono(barra, "zoom-in", "Acercar", self._zoom_acercar)
@@ -540,7 +546,6 @@ class MainWindow(QMainWindow):
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
-        barra.addWidget(self._etiqueta_pagina)
         self._construir_barra_firma()
 
         # Estado una/doble página: mismo QAction que sincroniza el radio del menú
@@ -1423,6 +1428,7 @@ class MainWindow(QMainWindow):
         documento = self._visor.documento
         total = documento.num_paginas if documento is not None else 0
         self._etiqueta_pagina.setText(f"Página {indice + 1} / {total}")
+        self._control_pagina.set_estado(indice, total)
 
     # -- Navegación: ir a página y enlaces ----------------------------------
 

@@ -740,3 +740,20 @@ def test_convertir_word_a_pdf_produce_pdf(
         doc.close()
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+# -- Conformidad Ladón: control de página y zoom en la toolbar --------------
+
+
+def test_control_pagina_navega_al_escribir(qapp: object, tmp_path: Path) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=8))
+        # El control refleja la página actual y su total.
+        assert ventana._control_pagina._etiqueta_total.text() == "/ 8"
+        # Escribir un número navega a esa página.
+        ventana._control_pagina._campo.setText("5")
+        ventana._control_pagina._campo.editingFinished.emit()
+        assert ventana._visor.pagina_actual() == 4
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
