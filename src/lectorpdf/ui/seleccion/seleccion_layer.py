@@ -70,6 +70,13 @@ class SeleccionLayer(QObject):
         self._cache.clear()
         self.limpiar()
 
+    def seleccionar_todo(self, pagina: int) -> None:
+        """Selecciona todo el texto de una página (acción Edición → Seleccionar
+        todo). Composición sobre las palabras ya disponibles; sin lógica nueva."""
+        palabras = self._palabras(pagina)
+        if palabras:
+            self._fijar_seleccion(pagina, palabras, 0, len(palabras) - 1)
+
     # -- Estado de la selección (API/tests) ---------------------------------
 
     def texto_seleccionado(self) -> str:

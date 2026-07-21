@@ -114,6 +114,10 @@ class VistaDocumento(QWidget):
     def mostrar_banda_firmado(self, firmado: bool) -> None:
         self.banda_firmado.setVisible(firmado)
 
+    def seleccionar_todo(self) -> None:
+        """Selecciona todo el texto de la página actual."""
+        self.capa_seleccion.seleccionar_todo(self.visor.pagina_actual())
+
     # -- Búsqueda -----------------------------------------------------------
 
     def activar_busqueda(self) -> None:

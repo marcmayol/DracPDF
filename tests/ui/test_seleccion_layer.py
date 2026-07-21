@@ -99,6 +99,15 @@ def test_copiar_pone_el_texto_en_el_portapapeles(qapp: object) -> None:
     assert portapapeles.text() == "frase exacta"
 
 
+def test_seleccionar_todo_abarca_toda_la_pagina(qapp: object) -> None:
+    _, capa = _montar()
+
+    capa.seleccionar_todo(0)
+
+    assert capa.texto_seleccionado() == "frase exacta seleccionable"
+    assert len(capa.items()) == 3
+
+
 def test_limpiar_borra_la_seleccion(qapp: object) -> None:
     _, capa = _montar()
     capa._seleccionar_parrafo(0, 80.0, 66.0)

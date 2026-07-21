@@ -1221,6 +1221,12 @@ class MainWindow(QMainWindow):
     def _cerrar_busqueda(self) -> None:
         self._vista()._cerrar_busqueda()
 
+    def _seleccionar_todo(self) -> None:
+        self._vista().seleccionar_todo()
+
+    def _copiar_seleccion(self) -> None:
+        self._vista().capa_seleccion.copiar()
+
     # -- Deshacer / rehacer en formularios ----------------------------------
 
     def _deshacer(self) -> None:
