@@ -208,6 +208,13 @@ class MainWindow(QMainWindow):
         self._construir_dock_miniaturas()
         self._panel_verificacion = VerificationPanel()
         self._construir_dock_verificacion()
+        # Ancho inicial de los paneles: el de miniaturas, ajustado a la miniatura
+        # (como la barra lateral de la maqueta) para que no quede columna muerta.
+        self.resizeDocks(
+            [self._dock_navegacion, self._dock_verificacion],
+            [190, 260],
+            Qt.Orientation.Horizontal,
+        )
         self._construir_barra()
         self._construir_barra_estado()
         self._construir_menu()

@@ -58,15 +58,19 @@ class ThumbnailPanel(QListWidget):
         self._renderizadas.clear()
         self.clear()
         ancho = self._ancho_item()
+        alto = self._alto_item()
         for pagina in documento.paginas:
             item = QListWidgetItem(str(pagina.indice + 1))
             item.setData(_ROL_INDICE, pagina.indice)
             item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             # Reserva espacio para que el scroll conozca el tamaño sin renderizar.
-            alto = int(pagina.alto_pt / pagina.ancho_pt * ANCHO_MINIATURA_PT_A_PX)
-            item.setSizeHint(QSize(ancho, alto + 24))
+            item.setSizeHint(QSize(ancho, alto))
             self.addItem(item)
         self._render_visibles()
+
+    def _alto_item(self) -> int:
+        """Alto uniforme del item: caja del icono + hueco para el número."""
+        return self.iconSize().height() + 26
 
     def _ancho_item(self) -> int:
         """Ancho de cada item = ancho del viewport (miniatura centrada), con un
@@ -76,11 +80,11 @@ class ThumbnailPanel(QListWidget):
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         ancho = self._ancho_item()
+        alto = self._alto_item()
         for fila in range(self.count()):
             item = self.item(fila)
             if item is not None:
-                actual = item.sizeHint()
-                item.setSizeHint(QSize(ancho, actual.height()))
+                item.setSizeHint(QSize(ancho, alto))
 
     def limpiar(self) -> None:
         """Vacía el panel (pestaña sin documento)."""
