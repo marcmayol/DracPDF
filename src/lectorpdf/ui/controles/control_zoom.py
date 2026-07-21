@@ -34,7 +34,7 @@ class ControlZoom(QWidget):
         self._campo = QLineEdit("100")
         self._campo.setObjectName("campoZoom")
         self._campo.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self._campo.setFixedWidth(34)
+        self._campo.setFixedWidth(44)  # cabe "800" (zoom máx.) sin recortar
         self._campo.setValidator(QIntValidator(_MIN_PCT, _MAX_PCT, self))
         self._campo.editingFinished.connect(self._al_editar)
         porcentaje = QLabel("%")

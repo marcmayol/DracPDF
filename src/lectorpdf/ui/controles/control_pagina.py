@@ -39,7 +39,7 @@ class ControlPagina(QWidget):
         self._campo = QLineEdit()
         self._campo.setObjectName("campoPagina")
         self._campo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._campo.setFixedWidth(34)
+        self._campo.setFixedWidth(44)  # cabe números de página de 3-4 cifras
         self._campo.setValidator(QIntValidator(1, 1, self))
         self._campo.editingFinished.connect(self._al_editar)
 
