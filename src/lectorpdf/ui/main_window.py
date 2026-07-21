@@ -131,8 +131,15 @@ def _resolver(ruta: Path) -> Path:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, *, restaurar_sesion: bool = False) -> None:
+    def __init__(
+        self, *, restaurar_sesion: bool = False, persistir_sesion: bool = False
+    ) -> None:
         super().__init__()
+        # Persistir la sesión (lista de documentos abiertos) al cerrar. Solo en
+        # arranque en frío sin fichero: un arranque puntual con un adjunto no debe
+        # sobrescribir la sesión de trabajo. El estado por documento (página/zoom)
+        # se guarda siempre, con independencia de esto.
+        self._persistir_sesion = persistir_sesion
         # Raíz de composición: un registro compartido para todos los adaptadores.
         self._registro = RegistroDocumentos()
         self._repositorio = PyMuPDFDocumentRepository(self._registro)
@@ -1197,8 +1204,9 @@ class MainWindow(QMainWindow):
             if not self._confirmar_cierre_documento(vista, activar=True):
                 event.ignore()
                 return
-        self._guardar_sesion()
-        for vista in self._vistas():
+        if self._persistir_sesion:  # solo en arranque en frío sin fichero
+            self._guardar_sesion()
+        for vista in self._vistas():  # el estado por documento se guarda siempre
             if vista.documento is not None:
                 self._guardar_estado_documento(vista.documento, vista)
         event.accept()

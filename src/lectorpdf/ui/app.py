@@ -32,12 +32,18 @@ def main(argv: list[str] | None = None) -> int:
         app.setWindowIcon(QIcon(str(icono_app)))
     aplicar_tema(app, cargar_tema_preferido())
 
-    # Restaura la sesión anterior al arrancar (si el usuario lo tiene activado).
-    ventana = MainWindow(restaurar_sesion=True)
+    # Arranque con fichero (doble clic / asociación / CLI): se abre solo ese
+    # documento, sin restaurar ni sobrescribir la sesión de trabajo guardada.
+    # Arranque normal (sin fichero): se restaura la sesión anterior (si está
+    # activado) y se persiste al cerrar.
+    con_fichero = bool(ruta_arg)
+    ventana = MainWindow(
+        restaurar_sesion=not con_fichero,
+        persistir_sesion=not con_fichero,
+    )
     instancia.mensaje_recibido.connect(ventana.abrir_desde_instancia)
     ventana.show()
 
-    # Permite abrir un PDF pasándolo como argumento: `lectorpdf documento.pdf`.
     if ruta_arg:
         ventana.abrir_ruta_con_aviso(Path(ruta_arg))
 
