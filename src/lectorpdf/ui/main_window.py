@@ -373,7 +373,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Ajustar ancho").triggered.connect(self._ajustar_ancho)
         menu.addAction("Ajustar página").triggered.connect(self._ajustar_pagina)
-        menu.addAction("Rotar vista").triggered.connect(self._rotar_vista)
+        menu.addAction("Rotar a la derecha").triggered.connect(self._rotar_derecha)
         menu.addSeparator()
         menu.addAction("Imprimir…").triggered.connect(self._imprimir)
         menu.addAction("Propiedades…").triggered.connect(self._mostrar_propiedades)
@@ -531,7 +531,7 @@ class MainWindow(QMainWindow):
         self._accion_doble = self._accion_conmutable(
             barra, "page-double", "Doble página", self._conmutar_doble
         )
-        self._accion_icono(barra, "rotate", "Rotar vista", self._rotar_vista)
+        self._accion_icono(barra, "rotate", "Rotar a la derecha", self._rotar_derecha)
         self._accion_icono(
             barra, "fullscreen", "Pantalla completa (F11)", self._conmutar_pantalla_completa
         )
@@ -684,8 +684,11 @@ class MainWindow(QMainWindow):
     def _ajustar_pagina(self) -> None:
         self._visor.ajustar_a_pagina()
 
-    def _rotar_vista(self) -> None:
+    def _rotar_derecha(self) -> None:
         self._visor.rotar_vista(90)
+
+    def _rotar_izquierda(self) -> None:
+        self._visor.rotar_vista(-90)
 
     # -- Acciones -----------------------------------------------------------
 

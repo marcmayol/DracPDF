@@ -59,6 +59,18 @@ def test_rotacion_intercambia_ancho_y_alto(qapp: object) -> None:
     assert visor._geometria[0].height() == 100.0
 
 
+def test_rotar_a_la_izquierda(qapp: object) -> None:
+    documento = _documento(1)
+    visor = _visor(documento)
+    visor.set_documento(documento, escala=1.0)
+
+    visor.rotar_vista(-90)  # izquierda
+
+    assert visor.rotacion() == 270
+    assert visor._geometria[0].width() == 200.0  # también intercambia ancho/alto
+    assert visor._geometria[0].height() == 100.0
+
+
 def test_ajuste_ancho_persiste_al_cambiar_tamano(qapp: object) -> None:
     documento = _documento(2)
     visor = _visor(documento)
