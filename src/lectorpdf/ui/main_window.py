@@ -444,12 +444,68 @@ class MainWindow(QMainWindow):
         self._idx_tab_indice = self._panel_lateral.addTab(self._outline, "Índice")
         self._panel_lateral.setTabVisible(self._idx_tab_indice, False)  # sin outline
 
-        dock = QDockWidget("Navegación", self)
-        dock.setWidget(self._panel_lateral)
-        dock.setAllowedAreas(
+        self._dock_navegacion = QDockWidget("Navegación", self)
+        self._dock_navegacion.setWidget(self._panel_lateral)
+        self._dock_navegacion.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+        self.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self._dock_navegacion
+        )
+        self._construir_acciones_paneles()
+
+    def _construir_acciones_paneles(self) -> None:
+        """Acciones conmutables (menú Ver) para mostrar los paneles Miniaturas
+        (F7) e Índice (F8). Solo componen sobre el dock existente."""
+        self._sincronizando_paneles = False
+        self._accion_panel_miniaturas = QAction("Panel de miniaturas", self)
+        self._accion_panel_miniaturas.setCheckable(True)
+        self._accion_panel_miniaturas.setShortcut(QKeySequence("F7"))
+        self._accion_panel_miniaturas.toggled.connect(self._conmutar_panel_miniaturas)
+        self._accion_panel_indice = QAction("Índice del documento", self)
+        self._accion_panel_indice.setCheckable(True)
+        self._accion_panel_indice.setShortcut(QKeySequence("F8"))
+        self._accion_panel_indice.toggled.connect(self._conmutar_panel_indice)
+        # Activas incluso antes de estar en el menú (atajos F7/F8).
+        self.addAction(self._accion_panel_miniaturas)
+        self.addAction(self._accion_panel_indice)
+        self._dock_navegacion.visibilityChanged.connect(
+            lambda _=False: self._sincronizar_checks_paneles()
+        )
+        self._panel_lateral.currentChanged.connect(
+            lambda _=0: self._sincronizar_checks_paneles()
+        )
+        self._sincronizar_checks_paneles()
+
+    def _conmutar_panel_miniaturas(self, activado: bool) -> None:
+        if self._sincronizando_paneles:
+            return
+        if activado:
+            self._dock_navegacion.show()
+            self._panel_lateral.setCurrentWidget(self._miniaturas)
+        else:
+            self._dock_navegacion.hide()
+        self._sincronizar_checks_paneles()
+
+    def _conmutar_panel_indice(self, activado: bool) -> None:
+        if self._sincronizando_paneles:
+            return
+        if activado:
+            self._dock_navegacion.show()
+            self._panel_lateral.setCurrentWidget(self._outline)
+        else:
+            self._dock_navegacion.hide()
+        self._sincronizar_checks_paneles()
+
+    def _sincronizar_checks_paneles(self) -> None:
+        """La marca refleja qué panel se ve: solo el de la pestaña activa cuando
+        el dock está visible (mutuamente excluyentes; ninguno si está oculto)."""
+        visible = not self._dock_navegacion.isHidden()
+        actual = self._panel_lateral.currentWidget()
+        self._sincronizando_paneles = True
+        self._accion_panel_miniaturas.setChecked(visible and actual is self._miniaturas)
+        self._accion_panel_indice.setChecked(visible and actual is self._outline)
+        self._sincronizando_paneles = False
 
     def _construir_dock_verificacion(self) -> None:
         dock = QDockWidget("Firmas digitales", self)

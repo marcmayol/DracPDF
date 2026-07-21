@@ -609,3 +609,31 @@ def test_barra_firma_es_contextual_del_modo_colocacion(
         assert ventana._barra_firma.isHidden()  # vuelve a ocultarse
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_toggles_de_paneles_muestran_y_ocultan_el_dock(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        ventana._dock_navegacion.show()
+        ventana._panel_lateral.setCurrentWidget(ventana._miniaturas)
+        ventana._sincronizar_checks_paneles()
+
+        # Con el dock visible en Miniaturas: solo esa acción marcada.
+        assert ventana._accion_panel_miniaturas.isChecked() is True
+        assert ventana._accion_panel_indice.isChecked() is False
+
+        # F8 lleva a Índice: cambia la marca (mutuamente excluyentes).
+        ventana._accion_panel_indice.trigger()
+        assert ventana._accion_panel_indice.isChecked() is True
+        assert ventana._accion_panel_miniaturas.isChecked() is False
+
+        # Desmarcar oculta el dock; ninguna acción marcada.
+        ventana._accion_panel_indice.trigger()
+        assert ventana._dock_navegacion.isHidden()
+        assert ventana._accion_panel_miniaturas.isChecked() is False
+        assert ventana._accion_panel_indice.isChecked() is False
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
