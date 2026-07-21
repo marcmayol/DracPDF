@@ -774,6 +774,35 @@ def test_control_zoom_ajusta_escala_al_escribir(qapp: object, tmp_path: Path) ->
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def test_estado_vacio_al_arrancar_y_paneles_ocultos(qapp: object) -> None:
+    ventana = MainWindow()
+    try:
+        # Sin documento: se muestra el estado vacío y los paneles laterales
+        # quedan ocultos (no hay pestaña "Sin documento" visible).
+        assert ventana._central.currentWidget() is ventana._estado_vacio
+        assert ventana._dock_navegacion.isVisible() is False
+        assert ventana._dock_verificacion.isVisible() is False
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_abrir_muestra_pestanas_y_cerrar_vuelve_al_estado_vacio(
+    qapp: object, tmp_path: Path
+) -> None:
+    ventana = MainWindow()
+    ventana.show()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path, paginas=2))
+        assert ventana._central.currentWidget() is ventana._pestanas
+        assert ventana._dock_navegacion.isVisible() is True
+        # Cerrar la última pestaña vuelve al estado vacío.
+        ventana._cerrar_pestana(ventana._pestanas.currentIndex())
+        assert ventana._central.currentWidget() is ventana._estado_vacio
+        assert ventana._dock_navegacion.isVisible() is False
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_barra_estado_refleja_documento_y_zoom(
     qapp: object, tmp_path: Path
 ) -> None:

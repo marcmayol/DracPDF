@@ -38,8 +38,10 @@ def test_vista_principal_arranca_con_el_tema(qapp: object, tema: tokens.Tema) ->
     ventana.resize(1000, 700)
     ventana.show()
 
-    # El área central es el QTabWidget de vistas; el visor pertenece a la ventana.
-    assert ventana.centralWidget() is ventana._pestanas
+    # El área central es la pila (estado vacío + pestañas); el visor pertenece
+    # a la ventana. Sin documento se muestra el estado vacío.
+    assert ventana.centralWidget() is ventana._central
+    assert ventana._central.currentWidget() is ventana._estado_vacio
     assert ventana._visor.window() is ventana
     assert ventana._tema is tema
     assert tema.bg in _app().styleSheet()
@@ -56,25 +58,27 @@ def _color_viewport_miniaturas(ventana: MainWindow) -> str:
 
 @pytest.mark.parametrize("tema", _TEMAS)
 def test_viewport_miniaturas_usa_superficie_del_tema(
-    qapp: object, tema: tokens.Tema
+    qapp: object, tmp_path: Path, tema: tokens.Tema
 ) -> None:
     guardar_preferencia_tema(tema.nombre)
     ventana = MainWindow()
     ventana.resize(1000, 700)
     ventana.show()
+    ventana.abrir_ruta(generar_formulario_completo(tmp_path / "f.pdf"))
 
     # El viewport del panel de miniaturas usa la superficie del tema activo
-    # (no la paleta por defecto ni el tema contrario) ya al arrancar.
+    # (no la paleta por defecto ni el tema contrario).
     assert _color_viewport_miniaturas(ventana) == tema.surface.lower()
 
 
 def test_viewport_miniaturas_se_repinta_al_cambiar_tema_en_caliente(
-    qapp: object,
+    qapp: object, tmp_path: Path
 ) -> None:
     guardar_preferencia_tema(tokens.TEMA_OSCURO.nombre)
     ventana = MainWindow()
     ventana.resize(1000, 700)
     ventana.show()
+    ventana.abrir_ruta(generar_formulario_completo(tmp_path / "f.pdf"))
     assert _color_viewport_miniaturas(ventana) == tokens.TEMA_OSCURO.surface.lower()
 
     # Cambio en caliente: el restyle debe propagarse también al viewport.

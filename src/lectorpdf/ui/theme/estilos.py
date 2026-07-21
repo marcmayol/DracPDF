@@ -141,6 +141,14 @@ QTabBar::tab {
 }
 QTabBar::tab:selected { color: $text; border-bottom: 2px solid $accent; }
 QTabBar::tab:hover:!selected { color: $text; }
+/* Estado vacío (sin documento): textos secundarios y recientes discretos. */
+QLabel#tituloVacio { color: $text; font-size: ${tam_titulo}px; }
+QLabel#pistaVacio { color: $text_muted; font-size: ${tam_meta}px; }
+QPushButton#recienteVacio {
+    background: transparent; border: none; color: $text_muted;
+    padding: 2px 8px; min-height: 14px;
+}
+QPushButton#recienteVacio:hover { color: $accent; background: transparent; }
 /* Panel del QTabWidget (docks Miniaturas/Índice): que el contenedor use la
    superficie del tema y no exponga la paleta por defecto en los bordes/franjas. */
 QTabWidget::pane { border: none; background: $surface; }
@@ -204,6 +212,7 @@ def generar_qss(tema: Tema) -> str:
         sig_unknown=tema.sig_unknown,
         familia_ui=_familia(TIPOGRAFIA.familia_ui),
         tam_base=TIPOGRAFIA.tam_base,
+        tam_titulo=TIPOGRAFIA.tam_titulo,
         tam_meta=TIPOGRAFIA.tam_meta,
         r_control=RADIOS.control,
         r_panel=RADIOS.panel,

@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QSizePolicy,
+    QStackedWidget,
     QTabWidget,
     QToolBar,
     QWidget,
@@ -92,6 +93,7 @@ from lectorpdf.ui.controles.control_zoom import ControlZoom
 from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
 from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
+from lectorpdf.ui.estado_vacio import EstadoVacio
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
@@ -221,6 +223,7 @@ class MainWindow(QMainWindow):
         self.resize(1100, 1000)
         if restaurar_sesion:
             self._restaurar_sesion()
+        self._actualizar_estado_central()
 
     def _aplicar_icono_ventana(self) -> None:
         ruta = ruta_icono_app()
@@ -242,6 +245,7 @@ class MainWindow(QMainWindow):
         self._accion_firmar.setIcon(icono("sign-cert", self._tema.accent))
         self._control_pagina.recolorear(self._tema.text)
         self._control_zoom.recolorear(self._tema.text)
+        self._estado_vacio.recolorear(self._tema.text_muted)
         # Barra de título nativa: la ventana ahora, y las futuras vía el gestor.
         self._gestor_barra.set_oscuro(self._tema.es_oscuro)
         aplicar_modo_oscuro(self, self._tema.es_oscuro)
@@ -299,15 +303,44 @@ class MainWindow(QMainWindow):
     # -- Construcción de la UI ----------------------------------------------
 
     def _construir_central(self) -> QWidget:
-        """El área central es un QTabWidget: una VistaDocumento por pestaña."""
+        """Área central: una pila con el estado vacío (sin documento) y el
+        QTabWidget de vistas (una VistaDocumento por pestaña). Cuando no hay
+        ningún documento abierto se muestra el estado vacío y la barra de
+        pestañas queda oculta."""
         self._pestanas = QTabWidget()
-        self._pestanas.setObjectName("centralWidget")
         self._pestanas.setDocumentMode(True)
         self._pestanas.setTabsClosable(True)
         self._pestanas.setMovable(True)
         self._pestanas.tabCloseRequested.connect(self._cerrar_pestana)
         self._pestanas.currentChanged.connect(self._al_cambiar_pestana)
-        return self._pestanas
+
+        self._estado_vacio = EstadoVacio()
+        self._estado_vacio.abrir_solicitado.connect(self._abrir_por_dialogo)
+        self._estado_vacio.reciente_elegido.connect(
+            lambda r: self.abrir_ruta_con_aviso(Path(r))
+        )
+
+        self._central = QStackedWidget()
+        self._central.setObjectName("centralWidget")
+        self._central.addWidget(self._estado_vacio)  # índice 0
+        self._central.addWidget(self._pestanas)  # índice 1
+        return self._central
+
+    def _hay_documentos(self) -> bool:
+        return any(v.documento is not None for v in self._vistas())
+
+    def _actualizar_estado_central(self) -> None:
+        """Muestra el estado vacío o el de pestañas según haya documentos, y
+        oculta los paneles laterales cuando no hay ninguno abierto."""
+        hay = self._hay_documentos()
+        self._central.setCurrentWidget(
+            self._pestanas if hay else self._estado_vacio
+        )
+        # Los paneles laterales no tienen sentido sin documento: se ocultan.
+        self._dock_navegacion.setVisible(hay)
+        self._dock_verificacion.setVisible(hay)
+        if not hay:
+            self._estado_vacio.set_recientes(self._recientes())
 
     # -- Gestión de pestañas (multi-documento) ------------------------------
 
@@ -417,6 +450,7 @@ class MainWindow(QMainWindow):
         vista.deleteLater()
         if self._pestanas.count() == 0:
             self._nueva_pestana_vacia()
+        self._actualizar_estado_central()  # sin documentos: vuelve el estado vacío
 
     def _al_cambiar_pestana(self, _indice: int) -> None:
         """Sincroniza los paneles compartidos con la pestaña activa."""
@@ -534,9 +568,11 @@ class MainWindow(QMainWindow):
         self._sincronizando_paneles = False
 
     def _construir_dock_verificacion(self) -> None:
-        dock = QDockWidget("Firmas digitales", self)
-        dock.setWidget(self._panel_verificacion)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self._dock_verificacion = QDockWidget("Firmas digitales", self)
+        self._dock_verificacion.setWidget(self._panel_verificacion)
+        self.addDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self._dock_verificacion
+        )
 
     def _construir_barra(self) -> None:
         barra = QToolBar("Navegación", self)
@@ -896,6 +932,7 @@ class MainWindow(QMainWindow):
         nombre = documento.titulo or ruta.name
         self.setWindowTitle(f"{nombre} — {_TITULO_BASE}")
         self._actualizar_etiqueta(vista.visor.pagina_actual())
+        self._actualizar_estado_central()  # ya hay documento: barra de pestañas
         return documento
 
     # -- Archivo: recientes, guardar como/copia, banda de firmado -----------
