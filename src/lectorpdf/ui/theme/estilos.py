@@ -10,6 +10,7 @@ from __future__ import annotations
 from string import Template
 
 from PySide6.QtCore import QSettings
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
 from lectorpdf.ui.theme.tokens import (
@@ -186,8 +187,37 @@ def generar_qss(tema: Tema) -> str:
     )
 
 
+def paleta_desde_tema(tema: Tema) -> QPalette:
+    """Paleta Qt derivada de los tokens del tema.
+
+    Complementa al QSS: cubre lo que el QSS no estiliza (diálogos nativos,
+    QMessageBox, roles de sistema) para que el modo oscuro del SO no se cuele con
+    superficies o textos ajenos al tema. El QSS sigue teniendo prioridad sobre los
+    widgets que sí estiliza."""
+    p = QPalette()
+    rol = QPalette.ColorRole
+    p.setColor(rol.Window, QColor(tema.bg))
+    p.setColor(rol.WindowText, QColor(tema.text))
+    p.setColor(rol.Base, QColor(tema.canvas))
+    p.setColor(rol.AlternateBase, QColor(tema.surface_2))
+    p.setColor(rol.Text, QColor(tema.text))
+    p.setColor(rol.Button, QColor(tema.surface_2))
+    p.setColor(rol.ButtonText, QColor(tema.text))
+    p.setColor(rol.ToolTipBase, QColor(tema.surface_2))
+    p.setColor(rol.ToolTipText, QColor(tema.text))
+    p.setColor(rol.PlaceholderText, QColor(tema.text_muted))
+    p.setColor(rol.Highlight, QColor(tema.accent))
+    p.setColor(rol.HighlightedText, QColor(tema.on_accent))
+    p.setColor(rol.Link, QColor(tema.accent))
+    deshabilitado = QPalette.ColorGroup.Disabled
+    for r in (rol.WindowText, rol.Text, rol.ButtonText):
+        p.setColor(deshabilitado, r, QColor(tema.text_muted))
+    return p
+
+
 def aplicar_tema(app: QApplication, tema: Tema) -> None:
     app.setStyleSheet(generar_qss(tema))
+    app.setPalette(paleta_desde_tema(tema))
 
 
 def guardar_preferencia_tema(nombre: str) -> None:

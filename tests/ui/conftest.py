@@ -13,6 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from collections.abc import Iterator  # noqa: E402
 
 import pytest  # noqa: E402
+from PySide6.QtGui import QPalette  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
@@ -25,9 +26,10 @@ def qapp() -> Iterator[QApplication]:
 
 @pytest.fixture(autouse=True)
 def _limpiar_stylesheet() -> Iterator[None]:
-    """Evita que un test que aplica un tema deje el QSS puesto para los demás
-    (el QSS altera tamaños mínimos y descuadraría tests de geometría)."""
+    """Evita que un test que aplica un tema deje el QSS o la paleta puestos para
+    los demás (alterarían tamaños mínimos y colores de otros tests)."""
     yield
     app = QApplication.instance()
     if isinstance(app, QApplication):
         app.setStyleSheet("")
+        app.setPalette(QPalette())
