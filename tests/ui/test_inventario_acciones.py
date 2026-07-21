@@ -9,6 +9,8 @@ incompleta": una acción que no exista o no esté conectada aquí, falla.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QMenu
 
 from lectorpdf.ui.main_window import MainWindow
@@ -52,6 +54,11 @@ _ESPERADAS: dict[str, str | None] = {
     "Exportar a PNG…": None,
     "Exportar a texto…": None,
     "Propiedades del documento…": None,
+    # Documento → Convertir (salientes) y Archivo → Word a PDF (Fase 7)
+    "A Word…": None,
+    "A HTML…": None,
+    "A Markdown…": None,
+    "Convertir Word a PDF (reformateado)…": None,
     # Firmas
     "Firmar (dibujar y estampar)…": None,
     "Firmar con certificado…": None,
@@ -121,3 +128,35 @@ def test_acciones_de_la_barra_de_herramientas_conectadas(qapp: object) -> None:
     ventana = MainWindow()
     for accion, _nombre in ventana._acciones_icono:
         assert _conectada(accion), f"botón de barra no conectado: {accion.toolTip()!r}"
+
+
+def _pdf_min(tmp_path: Path) -> Path:
+    import fitz
+
+    ruta = tmp_path / "doc.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(ruta)
+    doc.close()
+    return ruta
+
+
+def test_conversiones_salientes_deshabilitadas_sin_documento(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.ui import main_window as mw
+
+    ventana = MainWindow()
+    try:
+        acciones = _acciones_por_texto(ventana)
+        salientes = ("A Word…", "A HTML…", "A Markdown…")
+        # Sin documento: las salientes deshabilitadas; Word→PDF (externo) habilitada.
+        assert all(not acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]
+        assert acciones["Convertir Word a PDF (reformateado)…"].isEnabled()  # type: ignore[attr-defined]
+
+        # Con documento abierto: las salientes se habilitan.
+        ventana.abrir_ruta(_pdf_min(tmp_path))
+        acciones = _acciones_por_texto(ventana)
+        assert all(acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
