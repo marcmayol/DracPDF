@@ -556,9 +556,16 @@ def test_menu_contextual_tiene_las_acciones(qapp: object, tmp_path: Path) -> Non
         ventana.abrir_ruta(_pdf(tmp_path))
         menu = ventana._construir_menu_contextual(ventana._vista())
         textos = [a.text() for a in menu.actions() if a.text()]
-        assert "Copiar" in textos
-        assert "Ir a página…" in textos
-        assert "Propiedades…" in textos
+        for esperado in (
+            "Copiar",
+            "Seleccionar todo",
+            "Buscar…",
+            "Ir a página…",
+            "Rotar a la izquierda",
+            "Imprimir…",
+            "Propiedades del documento…",
+        ):
+            assert esperado in textos
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 

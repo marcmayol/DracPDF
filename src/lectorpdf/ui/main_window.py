@@ -369,16 +369,20 @@ class MainWindow(QMainWindow):
         copiar = menu.addAction("Copiar")
         copiar.setEnabled(bool(vista.capa_seleccion.texto_seleccionado()))
         copiar.triggered.connect(vista.capa_seleccion.copiar)
+        menu.addAction("Seleccionar todo").triggered.connect(self._seleccionar_todo)
         menu.addSeparator()
         menu.addAction("Buscar…").triggered.connect(self._activar_busqueda)
         menu.addAction("Ir a página…").triggered.connect(self._ir_a_pagina_dialogo)
         menu.addSeparator()
-        menu.addAction("Ajustar ancho").triggered.connect(self._ajustar_ancho)
-        menu.addAction("Ajustar página").triggered.connect(self._ajustar_pagina)
+        menu.addAction("Ajustar a ancho").triggered.connect(self._ajustar_ancho)
+        menu.addAction("Ajustar a página").triggered.connect(self._ajustar_pagina)
         menu.addAction("Rotar a la derecha").triggered.connect(self._rotar_derecha)
+        menu.addAction("Rotar a la izquierda").triggered.connect(self._rotar_izquierda)
         menu.addSeparator()
         menu.addAction("Imprimir…").triggered.connect(self._imprimir)
-        menu.addAction("Propiedades…").triggered.connect(self._mostrar_propiedades)
+        menu.addAction("Propiedades del documento…").triggered.connect(
+            self._mostrar_propiedades
+        )
         return menu
 
     def _cerrar_pestana(self, indice: int) -> None:
