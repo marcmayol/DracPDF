@@ -73,11 +73,56 @@ def generar_pdf_contenido(destino: Path) -> Path:
     return destino
 
 
+def generar_pdf_titulos_tabla(destino: Path) -> Path:
+    """PDF de 2 páginas con títulos (fuente grande), texto de cuerpo y una tabla
+    con bordes (3 filas × 2 columnas). Base de las conversiones salientes."""
+    doc = fitz.open()
+    p1 = doc.new_page(width=595.0, height=842.0)
+    p1.insert_text((72, 80), "Informe de prueba", fontsize=24)  # título
+    p1.insert_text((72, 120), "Resumen ejecutivo del documento.", fontsize=11)
+    p1.insert_text((72, 150), "Contiene una tabla y varias secciones.", fontsize=11)
+
+    # Tabla con bordes: 3 filas x 2 columnas.
+    filas = [("Concepto", "Valor"), ("Ingresos", "1000"), ("Gastos", "400")]
+    x0, y0, ancho_col, alto_fila = 72.0, 200.0, 180.0, 26.0
+    for i, (a, b) in enumerate(filas):
+        y = y0 + i * alto_fila
+        p1.draw_rect(fitz.Rect(x0, y, x0 + ancho_col, y + alto_fila))
+        p1.draw_rect(fitz.Rect(x0 + ancho_col, y, x0 + 2 * ancho_col, y + alto_fila))
+        p1.insert_text((x0 + 6, y + 17), a, fontsize=11)
+        p1.insert_text((x0 + ancho_col + 6, y + 17), b, fontsize=11)
+
+    p2 = doc.new_page(width=595.0, height=842.0)
+    p2.insert_text((72, 80), "Sección segunda", fontsize=20)  # título
+    p2.insert_text((72, 120), "Contenido de la segunda página.", fontsize=11)
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    return destino
+
+
+def generar_pdf_escaneado(destino: Path) -> Path:
+    """PDF de una página SIN capa de texto (solo una imagen): simula un escaneo."""
+    doc = fitz.open()
+    pagina = doc.new_page(width=300.0, height=400.0)
+    # Un pixmap rojo insertado como imagen; la página no tiene texto extraíble.
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 300, 400), False)
+    pix.set_rect(pix.irect, (200, 60, 60))
+    pagina.insert_image(pagina.rect, pixmap=pix)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    return destino
+
+
 def generar_todos(directorio: Path = DIRECTORIO_FIXTURES) -> dict[str, Path]:
     directorio.mkdir(parents=True, exist_ok=True)
     return {
         "simple": generar_pdf_simple(directorio / "simple.pdf"),
         "contenido": generar_pdf_contenido(directorio / "contenido.pdf"),
+        "titulos_tabla": generar_pdf_titulos_tabla(directorio / "titulos_tabla.pdf"),
+        "escaneado": generar_pdf_escaneado(directorio / "escaneado.pdf"),
     }
 
 

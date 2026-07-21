@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from tests.adapters.certificado_prueba import generar_pkcs12
-from tests.adapters.generar_fixtures import generar_pdf_contenido, generar_pdf_simple
+from tests.adapters.generar_fixtures import (
+    generar_pdf_contenido,
+    generar_pdf_escaneado,
+    generar_pdf_simple,
+    generar_pdf_titulos_tabla,
+)
 from tests.adapters.generar_fixtures_formularios import (
     generar_formulario_completo,
     generar_xfa,
@@ -24,6 +29,18 @@ def pdf_simple(tmp_path: Path) -> Path:
 def pdf_contenido(tmp_path: Path) -> Path:
     """PDF con índice, enlaces, texto buscable y metadatos (Fase 8)."""
     return generar_pdf_contenido(tmp_path / "contenido.pdf")
+
+
+@pytest.fixture
+def pdf_titulos_tabla(tmp_path: Path) -> Path:
+    """PDF con títulos y una tabla con bordes (conversiones salientes)."""
+    return generar_pdf_titulos_tabla(tmp_path / "titulos_tabla.pdf")
+
+
+@pytest.fixture
+def pdf_escaneado(tmp_path: Path) -> Path:
+    """PDF de una imagen sin capa de texto (simula escaneo)."""
+    return generar_pdf_escaneado(tmp_path / "escaneado.pdf")
 
 
 @pytest.fixture
