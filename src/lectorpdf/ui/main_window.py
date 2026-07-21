@@ -525,32 +525,29 @@ class MainWindow(QMainWindow):
         barra = QToolBar("Navegación", self)
         self.addToolBar(barra)
 
+        # Toolbar según la maqueta Ladón: solo los controles frecuentes. Buscar,
+        # imprimir, ajustes de vista, doble página, rotar y pantalla completa NO
+        # van aquí (viven en los menús Edición/Ver y siguen con su atajo).
         self._accion_icono(barra, "open", "Abrir…", self._abrir_por_dialogo)
         self._accion_icono(barra, "save", "Guardar", self._guardar)
         barra.addSeparator()
         self._accion_icono(barra, "page-prev", "Página anterior", self._pagina_anterior)
         self._accion_icono(barra, "page-next", "Página siguiente", self._pagina_siguiente)
-        self._accion_icono(barra, "search", "Buscar (Ctrl+F)", self._activar_busqueda)
-        self._accion_icono(barra, "print", "Imprimir (Ctrl+P)", self._imprimir)
         barra.addSeparator()
         self._accion_icono(barra, "zoom-out", "Alejar", self._zoom_alejar)
         self._accion_icono(barra, "zoom-in", "Acercar", self._zoom_acercar)
-        self._accion_icono(barra, "fit-width", "Ajustar ancho", self._ajustar_ancho)
-        self._accion_icono(barra, "fit-page", "Ajustar página", self._ajustar_pagina)
-        self._accion_doble = self._accion_conmutable(
-            barra, "page-double", "Doble página", self._conmutar_doble
-        )
-        self._accion_icono(barra, "rotate", "Rotar a la derecha", self._rotar_derecha)
-        self._accion_icono(
-            barra, "fullscreen", "Pantalla completa (F11)", self._conmutar_pantalla_completa
-        )
         barra.addSeparator()
         self._accion_icono(barra, "sign-draw", "Dibujar y estampar firma", self._iniciar_firma)
         self._accion_icono(barra, "sign-cert", "Firmar con certificado", self._firmar_digitalmente)
-        barra.addSeparator()
         self._accion_icono(barra, "verify", "Verificar firmas", self._verificar_firmas)
         barra.addWidget(self._etiqueta_pagina)
         self._construir_barra_firma()
+
+        # Estado una/doble página: mismo QAction que sincroniza el radio del menú
+        # Ver; ya no hay botón en la toolbar (la maqueta no lo incluye).
+        self._accion_doble = QAction(self)
+        self._accion_doble.setCheckable(True)
+        self._accion_doble.toggled.connect(self._conmutar_doble)
 
     def _construir_barra_firma(self) -> None:
         """Barra contextual del modo de colocación de firma: oculta por defecto,
