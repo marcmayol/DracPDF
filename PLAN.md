@@ -112,6 +112,34 @@ Operaciones de manipulación de PDF integradas en un menú "Herramientas" y en e
 
 **Criterio de aceptación:** script que une (con el orden comprobado), divide, protege y reabre con contraseña, desprotege (con igualdad verificada), comprime (con la reducción reportada) y exporta a PNG y texto, con exit 0; y demostración de que las operaciones sobre un documento FIRMADO se rechazan.
 
+### Fase 7: Conversiones de formato
+
+Restricción global: todo llega por pip y viaja dentro del instalador; prohibido detectar o invocar programas del sistema (Word, LibreOffice). El motor de composición para Word→PDF es el propio Qt. Esta fase nace bajo las "Reglas de aceptación de UI" del plan: incluye su tabla declarativa de acciones y amplía el test de inventario.
+
+#### Parte A: conversiones salientes (PDF → otros formatos)
+1. Puerto ConversorPDF en el core, con casos de uso ConvertirAWord, ConvertirAHtml, ConvertirAMarkdown; pdf2docx queda aislada detrás de su propio adaptador (es la dependencia con más riesgo de mantenimiento futuro: su cirugía debe ser local).
+2. PDF → Word con pdf2docx: rango de páginas elegible; al añadir la dependencia, verificar que NO hace downgrade del PyMuPDF del proyecto (si hay conflicto de versiones, se fija la nuestra y se prueba; no se acepta la suya sin más).
+3. PDF → HTML con fitz (get_text("html")), documento completo o rango, con las imágenes embebidas o en carpeta aneja (elegible).
+4. PDF → Markdown con fitz: extracción por bloques posicionales con heurística de títulos (tamaño de fuente relativa) y tablas básicas; el resultado prioriza texto limpio para edición/LLMs sobre réplica visual.
+5. Los PDFs escaneados (sin capa de texto) se detectan y avisan: la conversión saldría vacía o como imagen; no se promete OCR en esta fase.
+
+#### Parte B: conversión entrante (Word → PDF, "reformateado")
+6. Word → PDF por la cadena mammoth → HTML → QTextDocument → QPdfWriter: texto real seleccionable, tablas, listas, negritas/cursivas e imágenes del docx; tamaño de página y márgenes configurables en el diálogo.
+7. Etiquetado honesto en la UI: la acción se llama "Convertir Word a PDF (reformateado)..." y el diálogo aclara que conserva contenido y estructura, no el diseño exacto del original.
+
+#### Integración en UI (según la estructura de menús vigente; "Herramientas" ya no existe)
+8. Las conversiones salientes van en Documento → Convertir (submenú: A Word..., A HTML..., A Markdown...), operando sobre el documento abierto, con el worker de progreso y cancelación existente; deshabilitadas sin documento abierto.
+9. Word → PDF va en Archivo → "Convertir Word a PDF..." (no opera sobre el documento abierto: pide un .docx externo); al terminar ofrece abrir el PDF resultante.
+10. Tabla de acciones de la fase declarada en el test de inventario: las cuatro acciones con su menú de destino y condición de habilitación.
+
+#### Reglas propias de esta fase
+- El adaptador de Word→PDF (usa Qt) vive fuera del core: el caso de uso recibe el puerto como cualquier otro.
+- Salidas atómicas (temporal + replace), como todo lo que escribe fichero.
+- Fixtures por script: un docx de prueba generado con python-docx (títulos, tabla, lista, imagen, negritas) y un PDF multipágina con títulos y tabla para las salientes.
+- Documentos FIRMADOS: las conversiones salientes SÍ se permiten (leen, no modifican el original).
+
+**Criterio de aceptación:** (funcional) script de verificación sin UI que: convierte un PDF de fixture a docx comprobando texto y al menos una tabla; a HTML y Markdown comprobando texto y títulos; convierte el docx de fixture a PDF comprobando con fitz texto presente, tabla renderizada y texto seleccionable; y detecta un PDF escaneado avisando; todo con exit 0 y pip sin downgrade de PyMuPDF. (UI) el test de inventario ampliado pasa: las tres acciones de Documento → Convertir y la de Archivo existen, están conectadas, habilitadas/deshabilitadas según su condición, y la evidencia parte de las acciones, no de métodos privados.
+
 ### Fase 8: Fundamentos de visor
 
 Fuente de verdad visual: extensión del diseño "Identidad Ladón" para menús y navegación (Claude Design; se facilitará la URL de importación al inicio). Todo componente nuevo usa sus tokens; nada de estilo Qt por defecto.
