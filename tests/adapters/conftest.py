@@ -13,6 +13,7 @@ from tests.adapters.generar_fixtures import (
     generar_pdf_simple,
     generar_pdf_titulos_tabla,
 )
+from tests.adapters.generar_fixtures_docx import generar_docx_prueba
 from tests.adapters.generar_fixtures_formularios import (
     generar_formulario_completo,
     generar_xfa,
@@ -41,6 +42,12 @@ def pdf_titulos_tabla(tmp_path: Path) -> Path:
 def pdf_escaneado(tmp_path: Path) -> Path:
     """PDF de una imagen sin capa de texto (simula escaneo)."""
     return generar_pdf_escaneado(tmp_path / "escaneado.pdf")
+
+
+@pytest.fixture
+def docx_prueba(tmp_path: Path) -> Path:
+    """DOCX con título, negrita, lista, tabla e imagen (para Word→PDF)."""
+    return generar_docx_prueba(tmp_path / "prueba.docx")
 
 
 @pytest.fixture
