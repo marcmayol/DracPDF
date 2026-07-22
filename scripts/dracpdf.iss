@@ -3,7 +3,7 @@
 ; Instalación por usuario (sin privilegios de administrador).
 
 #define MyAppName "DracPDF"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.2.1"
 #define MyAppPublisher "Marc Mayol"
 #define MyAppContact "marcmayolorell@gmail.com"
 #define MyAppExeName "DracPDF.exe"
