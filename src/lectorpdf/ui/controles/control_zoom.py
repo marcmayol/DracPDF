@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIntValidator
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QToolButton, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QSizePolicy,
+    QToolButton,
+    QWidget,
+)
 
 from lectorpdf.ui.theme.iconos import icono
 
@@ -24,6 +31,8 @@ class ControlZoom(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # Compacto: la toolbar no debe estirarlo (si no, separa el botón acercar).
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         self._alejar = QToolButton()
         self._alejar.setToolTip("Alejar")
         self._alejar.clicked.connect(self.alejar)

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QSizePolicy,
     QToolButton,
     QWidget,
 )
@@ -28,6 +29,8 @@ class ControlPagina(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._total = 0
+        # Compacto: la toolbar no debe estirarlo (si no, separa el botón siguiente).
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
 
         self._prev = QToolButton()
         self._prev.setToolTip("Página anterior")
