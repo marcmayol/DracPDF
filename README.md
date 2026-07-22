@@ -1,11 +1,24 @@
+<div align="center">
+
+<img src="assets/brand/png/icon-256.png" alt="DracPDF" width="120" />
+
 # DracPDF
 
-Visor de PDF de escritorio con rellenado de formularios AcroForm, firma dibujada
-a mano y firma digital con certificado (PAdES). Escrito en Python con
-arquitectura hexagonal: el núcleo de dominio no depende de Qt, PyMuPDF ni pyHanko.
+**Lector de PDF de escritorio** — rellenado de formularios AcroForm, firma
+dibujada a mano y firma digital con certificado (PAdES).
 
-Identidad visual "Ladón" (tema claro/oscuro conmutable). El paquete interno se
-llama `lectorpdf` por razones históricas; la aplicación es **DracPDF**.
+[![Descargar la última versión](https://img.shields.io/github/v/release/marcmayol/DracPDF?label=Descargar&style=for-the-badge&color=E0534A)](https://github.com/marcmayol/DracPDF/releases/latest)
+&nbsp;
+[![Windows](https://img.shields.io/badge/Windows-por%20usuario-2A2E37?style=for-the-badge&logo=windows)](https://github.com/marcmayol/DracPDF/releases/latest)
+
+</div>
+
+---
+
+Escrito en Python con **arquitectura hexagonal**: el núcleo de dominio no depende
+de Qt, PyMuPDF ni pyHanko. Identidad visual "Ladón" (tema claro/oscuro
+conmutable). El paquete interno se llama `lectorpdf` por razones históricas; la
+aplicación es **DracPDF**.
 
 ## Descargar (Windows)
 
