@@ -7,6 +7,8 @@
 **Lector de PDF de escritorio** — rellenado de formularios AcroForm, firma
 dibujada a mano y firma digital con certificado (PAdES).
 
+**Gratis para uso no comercial.** Funciona en local, sin nube ni cuenta.
+
 [![Descargar la última versión](https://img.shields.io/github/v/release/marcmayol/DracPDF?label=Descargar&style=for-the-badge&color=E0534A)](https://github.com/marcmayol/DracPDF/releases/latest)
 &nbsp;
 [![Windows](https://img.shields.io/badge/Windows-por%20usuario-2A2E37?style=for-the-badge&logo=windows)](https://github.com/marcmayol/DracPDF/releases/latest)
@@ -21,6 +23,23 @@ Escrito en Python con **arquitectura hexagonal**: el núcleo de dominio no depen
 de Qt, PyMuPDF ni pyHanko. Identidad visual "Ladón" (tema claro/oscuro
 conmutable). El paquete interno se llama `lectorpdf` por razones históricas; la
 aplicación es **DracPDF**.
+
+## Características
+
+- **Visor** — multipágina, zoom y ajustes (ancho/página), miniaturas, índice,
+  búsqueda, enlaces, pestañas multi-documento y tema claro/oscuro.
+- **Formularios** — rellenado de campos AcroForm sobre el propio documento
+  (avisa si el PDF usa XFA, no soportado).
+- **Firma** — firma dibujada a mano estampada, **firma digital con certificado
+  (PAdES)** y verificación de firmas.
+- **Conversión** — PDF → Word / HTML / Markdown, Word (.docx) → PDF, y detección
+  de PDF escaneado.
+- **Organización** — unir PDF y rotar, reordenar o eliminar páginas.
+- **Sesión** — restaura los documentos abiertos y recuerda la página y el zoom
+  de cada uno.
+
+Todo funciona **en local** (sin nube ni cuenta) y es **gratis para uso no
+comercial** (ver [Licencia](#licencia)).
 
 ## Descargar (Windows)
 
