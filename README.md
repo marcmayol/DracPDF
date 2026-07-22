@@ -7,6 +7,15 @@ arquitectura hexagonal: el núcleo de dominio no depende de Qt, PyMuPDF ni pyHan
 Identidad visual "Ladón" (tema claro/oscuro conmutable). El paquete interno se
 llama `lectorpdf` por razones históricas; la aplicación es **DracPDF**.
 
+## Descargar (Windows)
+
+**➡️ [Descargar la última versión](https://github.com/marcmayol/DracPDF/releases/latest)**
+
+En esa página, descarga el instalador `DracPDF-<versión>-setup.exe` y ejecútalo.
+La instalación es **por usuario** (no requiere permisos de administrador): crea el
+acceso directo en el menú Inicio y la asociación con archivos PDF. Para
+actualizar, ejecuta encima el instalador de la versión nueva.
+
 ## Requisitos
 
 - Python 3.12+
