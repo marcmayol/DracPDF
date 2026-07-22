@@ -10,6 +10,8 @@ dibujada a mano y firma digital con certificado (PAdES).
 [![Descargar la última versión](https://img.shields.io/github/v/release/marcmayol/DracPDF?label=Descargar&style=for-the-badge&color=E0534A)](https://github.com/marcmayol/DracPDF/releases/latest)
 &nbsp;
 [![Windows](https://img.shields.io/badge/Windows-por%20usuario-2A2E37?style=for-the-badge&logo=windows)](https://github.com/marcmayol/DracPDF/releases/latest)
+&nbsp;
+[![Licencia](https://img.shields.io/badge/código%20visible%20·%20uso%20no%20comercial-6A7080?style=for-the-badge)](LICENSE)
 
 </div>
 
@@ -63,13 +65,18 @@ src/lectorpdf/
 
 Consulta `PLAN.md` para el detalle de fases y criterios de aceptación.
 
-## Licencia y propiedad
+## Licencia
 
-**Copyright (c) 2026 Marc Mayol. Todos los derechos reservados.**
+**Copyright (c) 2026 Marc Mayol.** Código visible con **uso no comercial permitido**.
 
-Software propietario de código visible: el código se publica solo para consulta.
-No se permite su uso, copia, modificación ni distribución, ni la explotación
-comercial directa o indirecta (incluir en packs de cursos, distribuciones
-preinstaladas, bundles, etc.), sin el consentimiento previo y por escrito del
-titular. Consulta el fichero [`LICENSE`](LICENSE). Para solicitar autorización:
-marcmayolorell@gmail.com.
+Puedes **usar, copiar, modificar y redistribuir** el Software con fines
+**no comerciales**, conservando el aviso de licencia y la atribución. La
+**explotación comercial** —directa o indirecta (venderlo, incluirlo en packs de
+cursos o materiales de pago, distribuciones preinstaladas comerciales, bundles,
+etc.)— queda **reservada al titular** y requiere su consentimiento previo y por
+escrito. Detalle completo en [`LICENSE`](LICENSE).
+
+Para una licencia comercial: marcmayolorell@gmail.com
+
+> Nota: "código visible con uso no comercial" **no** es lo mismo que "código
+> abierto" (open source), que no admite restricciones de uso comercial.

@@ -1,36 +1,52 @@
-DracPDF — Licencia propietaria (todos los derechos reservados)
-Proprietary License — All rights reserved
+DracPDF — Licencia de código visible con uso no comercial permitido
+Source-available, Non-Commercial License
 
-Copyright (c) 2026 Marc Mayol. Todos los derechos reservados / All rights reserved.
+Copyright (c) 2026 Marc Mayol. Todos los derechos reservados salvo los que se
+conceden expresamente en el apartado A.
 
 Este software, su código fuente, recursos y materiales asociados ("el Software")
 son propiedad exclusiva de Marc Mayol ("el Titular"). El Software se publica en
-modalidad de código visible ("source-available") ÚNICAMENTE con fines de consulta
-y lectura. Su publicación NO otorga ninguna licencia ni derecho sobre el Software,
-salvo los que el Titular conceda de forma expresa y por escrito.
+modalidad de código visible ("source-available"). El Titular concede los permisos
+del apartado A y se reserva todos los demás derechos, en particular la explotación
+comercial descrita en el apartado B.
 
-Queda PROHIBIDO, sin el consentimiento previo y por escrito del Titular:
+A. PERMISOS CONCEDIDOS (uso NO COMERCIAL)
 
-  1. Usar, ejecutar o desplegar el Software, ya sea con fines comerciales o no
-     comerciales.
-  2. Copiar, reproducir, modificar, traducir, adaptar o crear obras derivadas,
-     total o parcialmente.
-  3. Distribuir, publicar, sublicenciar, vender, alquilar, prestar o poner a
-     disposición de terceros el Software o cualquier parte de él, por cualquier
-     medio o soporte.
-  4. Cualquier explotación comercial DIRECTA o INDIRECTA. A título enunciativo y
-     no limitativo, se prohíbe incluir o distribuir el Software dentro de packs o
-     paquetes de cursos, materiales formativos (gratuitos o de pago), imágenes o
-     distribuciones preinstaladas, colecciones o "bundles" de software, productos
-     o servicios de terceros, o cualquier otra oferta o iniciativa comercial,
-     directa o indirectamente.
+   Se permite, de forma gratuita y sin necesidad de autorización previa, a
+   cualquier persona, con fines EXCLUSIVAMENTE NO COMERCIALES:
 
-La consulta del código a través de la plataforma donde se aloja (por ejemplo,
-GitHub) se permite exclusivamente a efectos de lectura y no constituye ni implica
-cesión alguna de los derechos anteriores. Todos los derechos no concedidos
-expresamente quedan reservados al Titular.
+     1. Usar, ejecutar e instalar el Software.
+     2. Copiar y reproducir el Software.
+     3. Estudiar, modificar y crear obras derivadas, total o parcialmente.
+     4. Redistribuir el Software o sus obras derivadas, siempre con fines no
+        comerciales, conservando íntegro este aviso de licencia y la atribución
+        al Titular.
 
-Para solicitar autorización de uso, escribe al Titular:
+   Se entiende por uso "no comercial" aquel que no está dirigido ni orientado,
+   directa o indirectamente, a obtener una ventaja comercial o una compensación
+   económica.
+
+B. USO COMERCIAL RESERVADO
+
+   Queda PROHIBIDO, sin el consentimiento previo y por escrito del Titular,
+   cualquier explotación COMERCIAL, directa o indirecta, del Software o de sus
+   obras derivadas. A título enunciativo y no limitativo, se prohíbe:
+
+     - Vender, alquilar, prestar mediante contraprestación, sublicenciar u ofrecer
+       el Software como producto o servicio de pago.
+     - Incluir o distribuir el Software dentro de packs o paquetes de cursos,
+       materiales formativos de pago, imágenes o distribuciones preinstaladas de
+       carácter comercial, colecciones o "bundles" comerciales, o cualquier
+       producto, servicio, oferta o iniciativa comercial de terceros.
+     - Cualquier otro uso cuya finalidad sea, directa o indirectamente, la ventaja
+       comercial o la compensación económica.
+
+C. ATRIBUCIÓN Y AVISOS
+
+   Toda copia o parte sustancial del Software debe conservar el aviso de copyright
+   anterior y el texto íntegro de esta licencia.
+
+Para solicitar una licencia de uso COMERCIAL, escribe al Titular:
   marcmayolorell@gmail.com
 
 EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O

@@ -5,7 +5,7 @@ description = "DracPDF — visor de PDF con rellenado de formularios y firma dig
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Marc Mayol", email = "marcmayolorell@gmail.com" }]
-license = { text = "Proprietary (all rights reserved). See LICENSE." }
+license = { text = "Source-available, non-commercial use permitted. See LICENSE." }
 classifiers = [
     "License :: Other/Proprietary License",
     "Private :: Do Not Upload",
