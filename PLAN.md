@@ -171,6 +171,29 @@ Fuente de verdad visual: extensión del diseño "Identidad Ladón" para menús y
 
 **Criterio de aceptación:** con un PDF de fixture con outline, enlaces y texto: la búsqueda de un término reporta las ocurrencias correctas y navega entre ellas; la selección de un rango conocido copia exactamente ese texto; el outline del panel coincide con get_toc(); imprimir a un QPrinter de PDF virtual produce el nº de páginas del rango pedido; recientes, última página y zoom persisten tras cerrar y reabrir; una segunda invocación de la app con otro PDF llega a la instancia existente; y deshacer tras editar dos campos restaura los valores en orden. Demostrado por script/tests con exit 0.
 
+### Fase 9: Texto y anotaciones
+
+Añadir contenido textual al PDF y corregir texto existente de forma acotada y honesta. Nace bajo las Reglas de aceptación de UI (tabla de acciones + inventario). Documentos FIRMADOS: todas las operaciones de esta fase se rechazan con la salida ya existente de "guardar una copia editable".
+
+#### Parte A: añadir texto y anotaciones
+1. Caso de uso `AñadirTexto`: estampa un texto en un rectángulo de una página (fuente de una lista embebida, tamaño, color); reutiliza el patrón del modo de colocación de la firma (dibujar rectángulo, escribir, mover/redimensionar antes de confirmar). Marca cambios sin guardar en el registro
+2. Anotaciones de marcado sobre la selección de texto existente (Fase 8): resaltar, subrayar y tachar, con color elegible entre los tokens semánticos; se crean como anotaciones estándar del PDF (visibles en cualquier visor) y se pueden eliminar (clic derecho sobre la anotación → eliminar)
+3. Nota adhesiva: anotación de texto emergente colocable en la página, editable y eliminable
+4. Integración: menú Edición (Añadir texto…, y las anotaciones también en el menú contextual de la selección) y grupo en la toolbar SOLO si la maqueta lo prevé; deshacer/rehacer de la Fase 8 cubre estas operaciones
+5. Las anotaciones y textos añadidos se ven en el render inmediatamente (invalidación de caché de la página afectada) y sobreviven a guardar/reabrir
+
+#### Parte B: corregir texto existente (acotada)
+6. Caso de uso `CorregirTexto`: dado un tramo seleccionado de una línea, lo elimina por redacción y escribe el texto de sustitución en su posición con tamaño equivalente y fuente sustituta de la lista embebida. Acción "Corregir texto…" (doble clic sobre texto o menú Edición): diálogo con el texto original, el campo de sustitución y el aviso de límites (fuente sustituta puede diferir de la original; sin reflujo: la corrección no reajusta el párrafo)
+7. Límites duros que el diálogo comunica y el código impone: tramos dentro de una sola línea; si el texto nuevo no cabe en el ancho disponible con el tamaño original, se ofrece reducir tamaño o cancelar, nunca invadir el texto vecino
+8. Si al probar con PDFs reales la calidad de la sustitución de fuente resulta inaceptable de forma general (no en casos raros), la Parte B se recorta a lo que funcione dignamente y se documenta el recorte en PLAN.md; el recorte se decide con el titular, no unilateralmente
+
+#### Reglas propias de esta fase
+- Fuentes embebidas en la app para el texto nuevo: una serif, una sans y una mono con licencia libre (OFL), empaquetadas en `assets/fonts/` y registradas en PyMuPDF; nada de depender de fuentes del sistema (el PDF debe verse igual en cualquier máquina)
+- Fixtures por script: PDF con párrafos y tamaños variados para corrección, y uno con texto seleccionable multibloques para anotaciones
+- La redacción de la Parte B elimina de verdad el texto original del contenido (no lo tapa): verificado extrayendo el texto tras corregir
+
+**Criterio de aceptación:** (funcional) script sin UI que: añade un texto en un rectángulo y verifica tras reabrir que está presente con la fuente embebida; crea resaltado, subrayado, tachado y nota sobre tramos conocidos y verifica tras reabrir que existen como anotaciones estándar y que una eliminada desaparece; corrige un tramo de una línea y verifica tras reabrir que el texto antiguo NO es extraíble y el nuevo sí, en la posición esperada; y demuestra el rechazo del caso "no cabe" ofreciendo las alternativas; todo con exit 0. (UI) inventario de acciones ampliado en verde: las acciones nuevas existen con su destino declarado, su condición (deshabilitadas sin documento o con documento firmado) y evidencia desde las acciones; y el deshacer revierte un texto añadido y una anotación, demostrado desde la acción de menú.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
@@ -179,7 +202,8 @@ Fuente de verdad visual: extensión del diseño "Identidad Ladón" para menús y
 - Commits por tarea, no por fase
 
 ## Fuera de alcance (v1)
-- Edición de texto del PDF
-- Anotaciones (subrayado, comentarios)
+- Edición de texto del PDF con reflujo del párrafo (la Fase 9 permite solo corrección acotada de un tramo de una línea, sin reajustar el párrafo)
 - XFA
 - OCR
+
+(Anotaciones de marcado y notas, y la corrección acotada de texto, pasan a estar en alcance en la **Fase 9**.)
