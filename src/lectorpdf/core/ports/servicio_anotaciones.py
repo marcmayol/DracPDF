@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from lectorpdf.core.domain.anotaciones import Color, TextoNuevo, TipoMarcado
+from lectorpdf.core.domain.anotaciones import Color, Nota, TextoNuevo, TipoMarcado
 from lectorpdf.core.domain.formularios import RectanguloPt
 
 
@@ -33,6 +33,10 @@ class ServicioAnotaciones(Protocol):
     ) -> None:
         """Crea una anotación de marcado (resaltado/subrayado/tachado) estándar
         sobre `rects_pt`. Registra la operación para deshacer."""
+        ...
+
+    def anadir_nota(self, documento_id: str, pagina: int, nota: Nota) -> None:
+        """Crea una nota adhesiva (anotación de texto emergente). Deshacible."""
         ...
 
     def anotacion_en(

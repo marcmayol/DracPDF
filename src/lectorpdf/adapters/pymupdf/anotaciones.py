@@ -17,6 +17,7 @@ from lectorpdf.adapters.pymupdf.historial_contenido import OperacionContenido
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.anotaciones import (
     Color,
+    Nota,
     TextoNuevo,
     TipoMarcado,
 )
@@ -112,6 +113,29 @@ class PyMuPDFAnotaciones:
         else:
             annot = page.add_strikeout_annot(rects)
         annot.set_colors(stroke=color)
+        annot.update()
+        return int(annot.xref)
+
+    def anadir_nota(self, documento_id: str, pagina: int, nota: Nota) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+
+        ref = [self._crear_nota(doc[pagina], nota)]
+
+        def deshacer() -> None:
+            _eliminar_por_xref(self._registro.obtener(documento_id)[pagina], ref[0])
+
+        def rehacer() -> None:
+            ref[0] = self._crear_nota(self._registro.obtener(documento_id)[pagina], nota)
+
+        self._registro.historial_contenido(documento_id).registrar(
+            OperacionContenido((pagina,), deshacer, rehacer)
+        )
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+
+    def _crear_nota(self, page: fitz.Page, nota: Nota) -> int:
+        annot = page.add_text_annot(fitz.Point(nota.x_pt, nota.y_pt), nota.texto)
         annot.update()
         return int(annot.xref)
 

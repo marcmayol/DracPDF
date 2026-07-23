@@ -55,13 +55,14 @@ from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
-from lectorpdf.core.domain.anotaciones import Color, TipoMarcado
+from lectorpdf.core.domain.anotaciones import Color, Nota, TipoMarcado
 from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.anadir_nota import AnadirNota
 from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
@@ -188,6 +189,7 @@ class MainWindow(QMainWindow):
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
         self._marcar = MarcarSeleccion(self._servicio_anotaciones)
+        self._anadir_nota_uc = AnadirNota(self._servicio_anotaciones)
         self._eliminar_anot = EliminarAnotacion(self._servicio_anotaciones)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
@@ -466,14 +468,16 @@ class MainWindow(QMainWindow):
             menu.addAction("Tachar").triggered.connect(
                 lambda: self._marcar_seleccion(TipoMarcado.TACHADO)
             )
-        # Eliminar la anotación bajo el clic (Fase 9), si la hay y es editable.
-        if pos is not None and not self._doc_firmado() and (
-            self._anotacion_bajo(vista, pos) is not None
-        ):
+        # Nota adhesiva y eliminar anotación bajo el clic (Fase 9), si editable.
+        if pos is not None and not self._doc_firmado():
             menu.addSeparator()
-            menu.addAction("Eliminar anotación").triggered.connect(
-                lambda: self._eliminar_anotacion_en(vista, pos)
+            menu.addAction("Añadir nota aquí…").triggered.connect(
+                lambda: self._anadir_nota_aqui(vista, pos)
             )
+            if self._anotacion_bajo(vista, pos) is not None:
+                menu.addAction("Eliminar anotación").triggered.connect(
+                    lambda: self._eliminar_anotacion_en(vista, pos)
+                )
         menu.addSeparator()
         menu.addAction("Buscar…").triggered.connect(self._activar_busqueda)
         menu.addAction("Ir a página…").triggered.connect(self._ir_a_pagina_dialogo)
@@ -763,6 +767,9 @@ class MainWindow(QMainWindow):
         )
         self._accion_tachar = self._accion_menu(
             menu, "Tachar", lambda: self._marcar_seleccion(TipoMarcado.TACHADO)
+        )
+        self._accion_nota = self._accion_menu(
+            menu, "Nota adhesiva…", self._anadir_nota
         )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
@@ -1177,17 +1184,11 @@ class MainWindow(QMainWindow):
             return
         vista.visor.invalidar_pagina(pagina)
 
-    def _anotacion_bajo(
+    def _punto_pdf(
         self, vista: VistaDocumento, pos: QPoint
-    ) -> tuple[int, int] | None:
-        """(página, xref) de la anotación bajo el punto de la vista, o None."""
-        doc = vista.documento
-        if doc is None:
-            return None
-        vp = vista.visor.viewport()
-        escena = vista.visor.mapToScene(pos) if vp is not None else None
-        if escena is None:
-            return None
+    ) -> tuple[int, float, float] | None:
+        """(página, x_pt, y_pt) del punto de la vista en coords PDF, o None."""
+        escena = vista.visor.mapToScene(pos)
         pagina = vista.visor.pagina_en_punto(escena)
         if pagina is None:
             return None
@@ -1196,8 +1197,55 @@ class MainWindow(QMainWindow):
             return None
         x_pt = (escena.x() - rect_pagina.left()) / vista.visor.escala
         y_pt = (escena.y() - rect_pagina.top()) / vista.visor.escala
+        return pagina, x_pt, y_pt
+
+    def _anotacion_bajo(
+        self, vista: VistaDocumento, pos: QPoint
+    ) -> tuple[int, int] | None:
+        """(página, xref) de la anotación bajo el punto de la vista, o None."""
+        doc = vista.documento
+        punto = self._punto_pdf(vista, pos)
+        if doc is None or punto is None:
+            return None
+        pagina, x_pt, y_pt = punto
         xref = self._servicio_anotaciones.anotacion_en(doc.id, pagina, x_pt, y_pt)
         return (pagina, xref) if xref is not None else None
+
+    def _anadir_nota(self) -> None:
+        """Nota adhesiva desde el menú: en el centro de la página actual."""
+        doc = self._documento
+        if doc is None or self._doc_firmado():
+            return
+        pagina = self._visor.pagina_actual()
+        pag = doc.paginas[pagina]
+        self._colocar_nota(doc, pagina, pag.ancho_pt / 2, pag.alto_pt / 2)
+
+    def _anadir_nota_aqui(self, vista: VistaDocumento, pos: QPoint) -> None:
+        """Nota adhesiva desde el contextual: en el punto del clic derecho."""
+        doc = vista.documento
+        if doc is None or self._doc_firmado():
+            return
+        punto = self._punto_pdf(vista, pos)
+        if punto is None:
+            return
+        pagina, x_pt, y_pt = punto
+        self._colocar_nota(doc, pagina, x_pt, y_pt)
+
+    def _colocar_nota(
+        self, doc: Documento, pagina: int, x_pt: float, y_pt: float
+    ) -> None:
+        texto, ok = QInputDialog.getMultiLineText(
+            self, "Nota adhesiva", "Texto de la nota:"
+        )
+        if not ok or not texto.strip():
+            return
+        try:
+            self._anadir_nota_uc.ejecutar(doc, pagina, Nota(x_pt, y_pt, texto.strip()))
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo añadir la nota", str(exc))
+            return
+        self._visor.invalidar_pagina(pagina)
+        self._actualizar_banda_firmado()
 
     def _confirmar_firma(self) -> None:
         if self._capa_sello.colocando():
@@ -1544,6 +1592,7 @@ class MainWindow(QMainWindow):
             self._accion_resaltar,
             self._accion_subrayar,
             self._accion_tachar,
+            self._accion_nota,
         ):
             accion.setEnabled(editable)
 

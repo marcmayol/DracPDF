@@ -10,7 +10,12 @@ import pytest
 from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
-from lectorpdf.core.domain.anotaciones import FuenteTexto, TextoNuevo, TipoMarcado
+from lectorpdf.core.domain.anotaciones import (
+    FuenteTexto,
+    Nota,
+    TextoNuevo,
+    TipoMarcado,
+)
 from lectorpdf.core.domain.errores import DocumentoFirmado
 from lectorpdf.core.domain.formularios import RectanguloPt
 
@@ -170,4 +175,33 @@ def test_marcar_rechaza_en_firmado(tmp_path: Path) -> None:
 
     with pytest.raises(DocumentoFirmado):
         servicio.marcar(doc_id, 0, (_RECT,), TipoMarcado.RESALTADO, (1.0, 0.9, 0.2))
+    registro.cerrar(doc_id)
+
+
+# -- Tarea 3: nota adhesiva -------------------------------------------------
+
+
+def test_nota_crea_anotacion_texto_y_sobrevive_reabrir(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    servicio.anadir_nota(doc_id, 0, Nota(80.0, 100.0, "Revisar esto"))
+
+    page = registro.obtener(doc_id)[0]
+    assert "Text" in [a.type[1] for a in page.annots()]
+
+    salida = tmp_path / "nota.pdf"
+    page.parent.save(str(salida))
+    registro.cerrar(doc_id)
+    reabierto = fitz.open(salida)
+    contenidos = [a.info["content"] for a in reabierto[0].annots()]
+    assert "Revisar esto" in contenidos
+    reabierto.close()
+
+
+def test_deshacer_nota_la_quita(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    servicio.anadir_nota(doc_id, 0, Nota(80.0, 100.0, "Nota"))
+    assert _n_annots(registro.obtener(doc_id)[0]) == 1
+
+    servicio.deshacer(doc_id)
+    assert _n_annots(registro.obtener(doc_id)[0]) == 0
     registro.cerrar(doc_id)
