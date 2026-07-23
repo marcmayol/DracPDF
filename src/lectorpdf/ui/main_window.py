@@ -18,6 +18,7 @@ from PySide6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
     QIcon,
+    QKeyEvent,
     QKeySequence,
     QShortcut,
 )
@@ -59,6 +60,7 @@ from lectorpdf.core.domain.anotaciones import (
     Color,
     Correccion,
     FuenteTexto,
+    ImagenEnPagina,
     Nota,
     TipoMarcado,
 )
@@ -83,6 +85,7 @@ from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.eliminar_anotacion import EliminarAnotacion
+from lectorpdf.core.use_cases.eliminar_imagen import EliminarImagen
 from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, ExportarImagenes
@@ -116,6 +119,7 @@ from lectorpdf.ui.estado_vacio import EstadoVacio
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
+from lectorpdf.ui.imagen.borrar_imagen_layer import BorrarImagenLayer
 from lectorpdf.ui.imagen.imagen_layer import ImagenLayer
 from lectorpdf.ui.impresion.impresion import imprimir_documento
 from lectorpdf.ui.outline.outline_panel import OutlinePanel
@@ -214,6 +218,7 @@ class MainWindow(QMainWindow):
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
         self._anadir_imagen = AnadirImagen(self._servicio_anotaciones)
+        self._eliminar_imagen = EliminarImagen(self._servicio_anotaciones)
         self._marcar = MarcarSeleccion(self._servicio_anotaciones)
         self._anadir_nota_uc = AnadirNota(self._servicio_anotaciones)
         self._corregir = CorregirTexto(self._servicio_anotaciones)
@@ -335,6 +340,10 @@ class MainWindow(QMainWindow):
         return self._vista().capa_imagen
 
     @property
+    def _capa_borrar_imagen(self) -> BorrarImagenLayer:
+        return self._vista().capa_borrar_imagen
+
+    @property
     def _capa_busqueda(self) -> BusquedaLayer:
         return self._vista().capa_busqueda
 
@@ -415,6 +424,7 @@ class MainWindow(QMainWindow):
             firmar_digital=self._firmar_digital,
             anadir_texto=self._anadir_texto,
             anadir_imagen=self._anadir_imagen,
+            eliminar_imagen=self._eliminar_imagen,
             buscar=self._buscar_contenido,
             palabras=self._obtener_palabras,
             enlaces=self._obtener_enlaces,
@@ -811,6 +821,9 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_anadir_imagen = self._accion_menu(
             menu, "Añadir imagen…", self._iniciar_imagen
+        )
+        self._accion_eliminar_imagen = self._accion_menu(
+            menu, "Eliminar imagen…", self._iniciar_borrar_imagen
         )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
@@ -1210,6 +1223,60 @@ class MainWindow(QMainWindow):
             return
         self._actualizar_controles_firma()
 
+    def _iniciar_borrar_imagen(self) -> None:
+        doc = self._documento
+        if doc is None or self._doc_firmado():
+            return
+        self._cancelar_colocacion()  # sin solapar con un modo de colocación
+        if not self._eliminar_imagen.imagenes(doc, self._visor.pagina_actual()):
+            QMessageBox.information(
+                self, "Eliminar imagen", "Esta página no tiene imágenes."
+            )
+            return
+        self.statusBar().showMessage(
+            "Haz clic en la imagen que quieres eliminar (Esc para cancelar)."
+        )
+        self._capa_borrar_imagen.iniciar(doc, self._confirmar_borrar_imagen)
+
+    def _confirmar_borrar_imagen(self, pagina: int, imagen: ImagenEnPagina) -> None:
+        doc = self._documento
+        if doc is None:
+            return
+        avisos = []
+        if imagen.en_varias_paginas:
+            avisos.append(
+                "• La imagen se usa en más páginas: se eliminará de todas ellas."
+            )
+        if imagen.cubre_pagina:
+            avisos.append(
+                "• La imagen cubre la página entera (¿un escaneo?): quedará en blanco."
+            )
+        detalle = ("\n\n" + "\n".join(avisos)) if avisos else ""
+        respuesta = QMessageBox.question(
+            self,
+            "Eliminar imagen",
+            f"¿Eliminar esta imagen del documento?{detalle}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if respuesta != QMessageBox.StandardButton.Yes:
+            self._capa_borrar_imagen.cancelar()
+            self.statusBar().clearMessage()
+            return
+        try:
+            self._eliminar_imagen.eliminar(doc, pagina, imagen)
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo eliminar la imagen", str(exc))
+        finally:
+            self._capa_borrar_imagen.cancelar()
+            self.statusBar().clearMessage()
+        # La imagen (xref compartido) puede estar en varias páginas: si es así,
+        # se invalida todo el render; si no, solo la página actual.
+        if imagen.en_varias_paginas:
+            self._invalidar_paginas(tuple(range(doc.num_paginas)))
+        else:
+            self._invalidar_paginas((pagina,))
+        self._actualizar_banda_firmado()
+
     def _marcar_seleccion(self, tipo: TipoMarcado) -> None:
         doc = self._documento
         if doc is None or self._doc_firmado():
@@ -1396,6 +1463,8 @@ class MainWindow(QMainWindow):
         self._capa_sello.cancelar()
         self._capa_texto.cancelar()
         self._capa_imagen.cancelar()
+        self._capa_borrar_imagen.cancelar()
+        self.statusBar().clearMessage()
         self._actualizar_controles_firma()
 
     def _firmar_digitalmente(self) -> None:
@@ -1716,6 +1785,7 @@ class MainWindow(QMainWindow):
             self._accion_nota,
             self._accion_corregir,
             self._accion_anadir_imagen,
+            self._accion_eliminar_imagen,
         ):
             accion.setEnabled(editable)
 
@@ -2023,6 +2093,14 @@ class MainWindow(QMainWindow):
     def _invalidar_paginas(self, paginas: tuple[int, ...] | None) -> None:
         for pagina in paginas or ():
             self._visor.invalidar_pagina(pagina)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Escape and self._capa_borrar_imagen.activo():
+            self._capa_borrar_imagen.cancelar()
+            self.statusBar().clearMessage()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # Todas las pestañas con cambios sin guardar se resuelven en un aviso.

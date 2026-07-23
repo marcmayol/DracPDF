@@ -831,6 +831,59 @@ def test_corregir_texto_desde_handler_elimina_original(
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def _pdf_con_imagen(tmp_path: Path) -> Path:
+    ruta = tmp_path / "img.pdf"
+    doc = fitz.open()
+    p = doc.new_page(width=300, height=300)
+    pm = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 24, 24), 0)
+    pm.set_rect(pm.irect, (220, 40, 40))
+    png = tmp_path / "roja.png"
+    pm.save(str(png))
+    p.insert_image(fitz.Rect(60, 80, 180, 200), filename=str(png))
+    doc.save(ruta)
+    doc.close()
+    return ruta
+
+
+def _color_centro(page: fitz.Page, img: object) -> tuple[int, int, int]:
+    r = fitz.Rect(img.rect_pt.x0, img.rect_pt.y0, img.rect_pt.x1, img.rect_pt.y1)  # type: ignore[attr-defined]
+    pix = page.get_pixmap(clip=r + (2, 2, -2, -2), dpi=72)
+    return pix.pixel(pix.width // 2, pix.height // 2)
+
+
+def test_borrar_imagen_desde_handler_y_deshacer_desde_menu(
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ventana = MainWindow()
+    try:
+        doc = ventana.abrir_ruta(_pdf_con_imagen(tmp_path))
+        img = ventana._eliminar_imagen.imagenes(doc, 0)[0]
+        page = ventana._registro.obtener(doc.id)[0]
+        assert _color_centro(page, img) == (220, 40, 40)
+
+        # El usuario confirma en el diálogo.
+        monkeypatch.setattr(
+            mw.QMessageBox,
+            "question",
+            lambda *a, **k: mw.QMessageBox.StandardButton.Yes,
+        )
+        ventana._confirmar_borrar_imagen(0, img)
+        assert _color_centro(ventana._registro.obtener(doc.id)[0], img) == (
+            255,
+            255,
+            255,
+        )
+
+        ventana._deshacer()  # deshacer desde el menú Edición devuelve la imagen
+        assert _color_centro(ventana._registro.obtener(doc.id)[0], img) == (
+            220,
+            40,
+            40,
+        )
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_marcar_seleccion_y_deshacer_desde_menu(
     qapp: object, tmp_path: Path
 ) -> None:

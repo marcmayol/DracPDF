@@ -17,6 +17,7 @@ from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.anadir_imagen import AnadirImagen
 from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
+from lectorpdf.core.use_cases.eliminar_imagen import EliminarImagen
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.obtener_enlaces import ObtenerEnlaces
@@ -28,6 +29,7 @@ from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.imagen.borrar_imagen_layer import BorrarImagenLayer
 from lectorpdf.ui.imagen.imagen_layer import ImagenLayer
 from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.digital_seal_layer import DigitalSealLayer
@@ -58,6 +60,7 @@ class VistaDocumento(QWidget):
         firmar_digital: FirmarDigitalmente,
         anadir_texto: AnadirTexto,
         anadir_imagen: AnadirImagen,
+        eliminar_imagen: EliminarImagen,
         buscar: BuscarEnDocumento,
         palabras: ObtenerPalabras,
         enlaces: ObtenerEnlaces,
@@ -75,6 +78,9 @@ class VistaDocumento(QWidget):
         self.capa_imagen = ImagenLayer(self.visor, anadir_imagen)
         self.capa_busqueda = BusquedaLayer(self.visor)
         self.capa_seleccion = SeleccionLayer(self.visor, palabras)
+        # Se instala tras la selección para filtrar el ratón antes que ella en
+        # modo borrado (y consumir el clic sobre la imagen elegida).
+        self.capa_borrar_imagen = BorrarImagenLayer(self.visor, eliminar_imagen)
         self.capa_enlaces = EnlacesLayer(self.visor, enlaces)
         self.barra_busqueda = BarraBusqueda()
         self.barra_busqueda.hide()
