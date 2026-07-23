@@ -18,6 +18,7 @@ from pathlib import Path
 import fitz
 
 from lectorpdf.adapters.pymupdf.historial import HistorialEdiciones
+from lectorpdf.adapters.pymupdf.historial_contenido import HistorialContenido
 from lectorpdf.core.domain.errores import DocumentoNoAbierto
 
 
@@ -33,6 +34,7 @@ class RegistroDocumentos:
         self._documentos: dict[str, fitz.Document] = {}
         self._marcas: dict[str, set[Marca]] = {}
         self._historiales: dict[str, HistorialEdiciones] = {}
+        self._historiales_contenido: dict[str, HistorialContenido] = {}
 
     def registrar(self, documento: fitz.Document) -> str:
         """Registra un documento ya abierto y devuelve su id de sesión.
@@ -58,6 +60,7 @@ class RegistroDocumentos:
         documento = self._documentos.pop(documento_id, None)
         self._marcas.pop(documento_id, None)
         self._historiales.pop(documento_id, None)
+        self._historiales_contenido.pop(documento_id, None)
         if documento is not None:
             documento.close()
 
@@ -65,6 +68,13 @@ class RegistroDocumentos:
         """Historial de ediciones del documento (deshacer/rehacer). Se crea al
         primer uso y se descarta al cerrar o recargar."""
         return self._historiales.setdefault(documento_id, HistorialEdiciones())
+
+    def historial_contenido(self, documento_id: str) -> HistorialContenido:
+        """Historial de operaciones de contenido (texto, imágenes) del documento.
+        Se crea al primer uso y se descarta al cerrar o reabrir."""
+        return self._historiales_contenido.setdefault(
+            documento_id, HistorialContenido()
+        )
 
     # -- Operaciones a nivel de fichero -------------------------------------
 
@@ -125,6 +135,7 @@ class RegistroDocumentos:
         nuevo = fitz.open(ruta)
         self._documentos[documento_id] = nuevo
         self._historiales.pop(documento_id, None)  # ids de campo pueden cambiar
+        self._historiales_contenido.pop(documento_id, None)
         self.desmarcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
         if _esta_firmado(nuevo):
             self.marcar(documento_id, Marca.FIRMADO)
