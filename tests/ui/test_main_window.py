@@ -570,6 +570,19 @@ def test_menu_contextual_tiene_las_acciones(qapp: object, tmp_path: Path) -> Non
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def test_menu_contextual_ofrece_anadir_imagen(qapp: object, tmp_path: Path) -> None:
+    from PySide6.QtCore import QPoint
+
+    ventana = MainWindow()
+    try:
+        ventana.abrir_ruta(_pdf(tmp_path))
+        menu = ventana._construir_menu_contextual(ventana._vista(), QPoint(10, 10))
+        textos = [a.text() for a in menu.actions() if a.text()]
+        assert "Añadir imagen…" in textos
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_copiar_del_menu_deshabilitado_sin_seleccion(
     qapp: object, tmp_path: Path
 ) -> None:

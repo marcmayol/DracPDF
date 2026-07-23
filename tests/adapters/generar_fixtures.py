@@ -116,6 +116,40 @@ def generar_pdf_escaneado(destino: Path) -> Path:
     return destino
 
 
+def generar_pdf_parrafos(destino: Path) -> Path:
+    """PDF con párrafos y tamaños de letra variados (Fase 9: corrección).
+
+    Incluye el tramo "CINCUENTA" (tamaño 13) para corregir y una línea corta
+    "OK" (tamaño 22) donde un texto largo no cabe: prueba el caso "no cabe".
+    """
+    doc = fitz.open()
+    p = doc.new_page(width=420.0, height=300.0)
+    p.insert_text((40, 70), "El pago acordado es de CINCUENTA euros.", fontsize=13)
+    p.insert_text((40, 120), "Cláusula segunda del contrato firmado.", fontsize=11)
+    p.insert_text((40, 180), "OK", fontsize=22)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    return destino
+
+
+def generar_pdf_con_imagenes(destino: Path) -> Path:
+    """PDF de 2 páginas que comparten un logo (misma imagen), para el borrado de
+    imágenes y el aviso de "imagen en varias páginas" (Fase 9, Parte C)."""
+    logo = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 32, 32), False)
+    logo.set_rect(logo.irect, (40, 90, 200))
+    png = logo.tobytes("png")
+    doc = fitz.open()
+    for i in range(2):
+        p = doc.new_page(width=300.0, height=300.0)
+        p.insert_text((30, 40), f"Página {i + 1} con logo compartido.", fontsize=11)
+        p.insert_image(fitz.Rect(60, 80, 160, 180), stream=png)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destino)
+    doc.close()
+    return destino
+
+
 def generar_todos(directorio: Path = DIRECTORIO_FIXTURES) -> dict[str, Path]:
     directorio.mkdir(parents=True, exist_ok=True)
     return {
@@ -123,6 +157,8 @@ def generar_todos(directorio: Path = DIRECTORIO_FIXTURES) -> dict[str, Path]:
         "contenido": generar_pdf_contenido(directorio / "contenido.pdf"),
         "titulos_tabla": generar_pdf_titulos_tabla(directorio / "titulos_tabla.pdf"),
         "escaneado": generar_pdf_escaneado(directorio / "escaneado.pdf"),
+        "parrafos": generar_pdf_parrafos(directorio / "parrafos.pdf"),
+        "con_imagenes": generar_pdf_con_imagenes(directorio / "con_imagenes.pdf"),
     }
 
 

@@ -521,6 +521,11 @@ class MainWindow(QMainWindow):
                 menu.addAction("Eliminar anotación").triggered.connect(
                     lambda: self._eliminar_anotacion_en(vista, pos)
                 )
+            menu.addAction("Añadir imagen…").triggered.connect(self._iniciar_imagen)
+            if self._imagen_bajo(vista, pos) is not None:
+                menu.addAction("Eliminar imagen").triggered.connect(
+                    lambda: self._eliminar_imagen_aqui(vista, pos)
+                )
         menu.addSeparator()
         menu.addAction("Buscar…").triggered.connect(self._activar_busqueda)
         menu.addAction("Ir a página…").triggered.connect(self._ir_a_pagina_dialogo)
@@ -1336,6 +1341,25 @@ class MainWindow(QMainWindow):
         pagina, x_pt, y_pt = punto
         xref = self._servicio_anotaciones.anotacion_en(doc.id, pagina, x_pt, y_pt)
         return (pagina, xref) if xref is not None else None
+
+    def _imagen_bajo(
+        self, vista: VistaDocumento, pos: QPoint
+    ) -> tuple[int, ImagenEnPagina] | None:
+        """(página, imagen) bajo el punto del clic derecho, o None."""
+        doc = vista.documento
+        punto = self._punto_pdf(vista, pos)
+        if doc is None or punto is None:
+            return None
+        pagina, x_pt, y_pt = punto
+        img = self._eliminar_imagen.imagen_en(doc, pagina, x_pt, y_pt)
+        return (pagina, img) if img is not None else None
+
+    def _eliminar_imagen_aqui(self, vista: VistaDocumento, pos: QPoint) -> None:
+        objetivo = self._imagen_bajo(vista, pos)
+        if objetivo is None:
+            return
+        pagina, img = objetivo
+        self._confirmar_borrar_imagen(pagina, img)
 
     def _anadir_nota(self) -> None:
         """Nota adhesiva desde el menú: en el centro de la página actual."""
