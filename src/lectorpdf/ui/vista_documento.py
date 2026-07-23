@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.modelos import Documento
+from lectorpdf.core.use_cases.anadir_imagen import AnadirImagen
 from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
@@ -27,6 +28,7 @@ from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.forms.form_layer import FormLayer
+from lectorpdf.ui.imagen.imagen_layer import ImagenLayer
 from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.digital_seal_layer import DigitalSealLayer
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
@@ -55,6 +57,7 @@ class VistaDocumento(QWidget):
         estampar: EstamparFirma,
         firmar_digital: FirmarDigitalmente,
         anadir_texto: AnadirTexto,
+        anadir_imagen: AnadirImagen,
         buscar: BuscarEnDocumento,
         palabras: ObtenerPalabras,
         enlaces: ObtenerEnlaces,
@@ -69,6 +72,7 @@ class VistaDocumento(QWidget):
         self.capa_firma = SignatureLayer(self.visor, estampar)
         self.capa_sello = DigitalSealLayer(self.visor, firmar_digital)
         self.capa_texto = TextoLayer(self.visor, anadir_texto)
+        self.capa_imagen = ImagenLayer(self.visor, anadir_imagen)
         self.capa_busqueda = BusquedaLayer(self.visor)
         self.capa_seleccion = SeleccionLayer(self.visor, palabras)
         self.capa_enlaces = EnlacesLayer(self.visor, enlaces)

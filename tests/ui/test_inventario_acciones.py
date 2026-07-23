@@ -37,6 +37,7 @@ _ESPERADAS: dict[str, str | None] = {
     "Tachar": None,
     "Nota adhesiva…": None,
     "Corregir texto…": None,
+    "Añadir imagen…": None,
     "Buscar…": "Ctrl+F",
     "Ir a página…": "Ctrl+G",
     # Ver
@@ -179,7 +180,7 @@ def test_anadir_texto_deshabilitado_sin_documento_o_firmado(
         acciones = _acciones_por_texto(ventana)
         edicion = (
             "Añadir texto…", "Resaltar", "Subrayar", "Tachar",
-            "Nota adhesiva…", "Corregir texto…",
+            "Nota adhesiva…", "Corregir texto…", "Añadir imagen…",
         )
         assert not any(acciones[t].isEnabled() for t in edicion)  # type: ignore[attr-defined]
 

@@ -73,6 +73,7 @@ from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.anadir_imagen import AnadirImagen
 from lectorpdf.core.use_cases.anadir_nota import AnadirNota
 from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
@@ -115,6 +116,7 @@ from lectorpdf.ui.estado_vacio import EstadoVacio
 from lectorpdf.ui.forms.form_layer import FormLayer
 from lectorpdf.ui.herramientas.dividir_dialog import DividirDialog
 from lectorpdf.ui.herramientas.unir_dialog import UnirDialog
+from lectorpdf.ui.imagen.imagen_layer import ImagenLayer
 from lectorpdf.ui.impresion.impresion import imprimir_documento
 from lectorpdf.ui.outline.outline_panel import OutlinePanel
 from lectorpdf.ui.propiedades_dialog import PropiedadesDialog
@@ -211,6 +213,7 @@ class MainWindow(QMainWindow):
         self._historial_form = HistorialFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
+        self._anadir_imagen = AnadirImagen(self._servicio_anotaciones)
         self._marcar = MarcarSeleccion(self._servicio_anotaciones)
         self._anadir_nota_uc = AnadirNota(self._servicio_anotaciones)
         self._corregir = CorregirTexto(self._servicio_anotaciones)
@@ -328,6 +331,10 @@ class MainWindow(QMainWindow):
         return self._vista().capa_texto
 
     @property
+    def _capa_imagen(self) -> ImagenLayer:
+        return self._vista().capa_imagen
+
+    @property
     def _capa_busqueda(self) -> BusquedaLayer:
         return self._vista().capa_busqueda
 
@@ -407,6 +414,7 @@ class MainWindow(QMainWindow):
             estampar=self._estampar,
             firmar_digital=self._firmar_digital,
             anadir_texto=self._anadir_texto,
+            anadir_imagen=self._anadir_imagen,
             buscar=self._buscar_contenido,
             palabras=self._obtener_palabras,
             enlaces=self._obtener_enlaces,
@@ -757,6 +765,7 @@ class MainWindow(QMainWindow):
             self._capa_firma.colocando()
             or self._capa_sello.colocando()
             or self._capa_texto.colocando()
+            or self._capa_imagen.colocando()
         )
 
     def _actualizar_controles_firma(self) -> None:
@@ -798,6 +807,10 @@ class MainWindow(QMainWindow):
         )
         self._accion_corregir = self._accion_menu(
             menu, "Corregir texto…", self._corregir_texto
+        )
+        menu.addSeparator()
+        self._accion_anadir_imagen = self._accion_menu(
+            menu, "Añadir imagen…", self._iniciar_imagen
         )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
@@ -1179,6 +1192,24 @@ class MainWindow(QMainWindow):
         )
         self._actualizar_controles_firma()
 
+    def _iniciar_imagen(self) -> None:
+        if self._documento is None or self._doc_firmado():
+            return
+        ruta, _ = QFileDialog.getOpenFileName(
+            self,
+            "Elegir imagen",
+            "",
+            "Imágenes (*.png *.jpg *.jpeg)",
+        )
+        if not ruta:
+            return
+        if not self._capa_imagen.iniciar_colocacion(self._documento, Path(ruta)):
+            QMessageBox.warning(
+                self, "Imagen", "No se pudo cargar la imagen seleccionada."
+            )
+            return
+        self._actualizar_controles_firma()
+
     def _marcar_seleccion(self, tipo: TipoMarcado) -> None:
         doc = self._documento
         if doc is None or self._doc_firmado():
@@ -1346,6 +1377,14 @@ class MainWindow(QMainWindow):
             self._actualizar_banda_firmado()
             self._actualizar_controles_firma()
             return
+        if self._capa_imagen.colocando():
+            try:
+                self._capa_imagen.confirmar()
+            except ErrorDominio as exc:
+                QMessageBox.warning(self, "No se pudo añadir la imagen", str(exc))
+            self._actualizar_banda_firmado()
+            self._actualizar_controles_firma()
+            return
         try:
             self._capa_firma.confirmar()
         except ErrorDominio as exc:
@@ -1356,6 +1395,7 @@ class MainWindow(QMainWindow):
         self._capa_firma.cancelar()
         self._capa_sello.cancelar()
         self._capa_texto.cancelar()
+        self._capa_imagen.cancelar()
         self._actualizar_controles_firma()
 
     def _firmar_digitalmente(self) -> None:
@@ -1675,6 +1715,7 @@ class MainWindow(QMainWindow):
             self._accion_tachar,
             self._accion_nota,
             self._accion_corregir,
+            self._accion_anadir_imagen,
         ):
             accion.setEnabled(editable)
 

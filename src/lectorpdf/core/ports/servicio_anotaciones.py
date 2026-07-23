@@ -14,6 +14,8 @@ from lectorpdf.core.domain.anotaciones import (
     Color,
     Correccion,
     FuenteTexto,
+    ImagenEnPagina,
+    ImagenNueva,
     Nota,
     TextoNuevo,
     TipoMarcado,
@@ -74,6 +76,34 @@ class ServicioAnotaciones(Protocol):
         """Redacta el tramo (elimina de verdad el original) y escribe el texto
         nuevo en su sitio con fuente sustituta embebida, casando el tamaño con la
         altura del tramo. Lanza `TextoNoCabe` si no cabe y `reducir=False`."""
+        ...
+
+    def anadir_imagen(
+        self, documento_id: str, pagina: int, imagen: ImagenNueva
+    ) -> None:
+        """Inserta una imagen (PNG/JPEG) desde fichero en el rectángulo indicado,
+        conservando la proporción si se pide. Marca cambios sin guardar y registra
+        la operación para deshacer."""
+        ...
+
+    def imagenes_en(
+        self, documento_id: str, pagina: int
+    ) -> tuple[ImagenEnPagina, ...]:
+        """Imágenes detectadas en `pagina` con su rectángulo exacto (para el modo
+        de selección visual del borrado)."""
+        ...
+
+    def imagen_en(
+        self, documento_id: str, pagina: int, x_pt: float, y_pt: float
+    ) -> ImagenEnPagina | None:
+        """La imagen (la de encima) cuyo rectángulo contiene el punto, o None."""
+        ...
+
+    def eliminar_imagen(
+        self, documento_id: str, pagina: int, imagen: ImagenEnPagina
+    ) -> None:
+        """Elimina la imagen del documento (`delete_image`). Deshacible: restaura
+        el objeto de imagen original. Marca cambios sin guardar."""
         ...
 
     def puede_deshacer(self, documento_id: str) -> bool: ...

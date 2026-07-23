@@ -19,6 +19,8 @@ from lectorpdf.core.domain.anotaciones import (
     Color,
     Correccion,
     FuenteTexto,
+    ImagenEnPagina,
+    ImagenNueva,
     Nota,
     TextoNuevo,
     TipoMarcado,
@@ -233,6 +235,104 @@ class PyMuPDFAnotaciones:
             color=correccion.color,
         )
 
+    # -- Imágenes (Parte C) -------------------------------------------------
+
+    def anadir_imagen(
+        self, documento_id: str, pagina: int, imagen: ImagenNueva
+    ) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+
+        antes = _snapshot(doc[pagina])
+        self._insertar_imagen(doc[pagina], imagen)
+
+        def deshacer() -> None:
+            _restaurar(self._registro.obtener(documento_id)[pagina], antes)
+
+        def rehacer() -> None:
+            self._insertar_imagen(self._registro.obtener(documento_id)[pagina], imagen)
+
+        self._registro.historial_contenido(documento_id).registrar(
+            OperacionContenido((pagina,), deshacer, rehacer)
+        )
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+
+    def _insertar_imagen(self, page: fitz.Page, imagen: ImagenNueva) -> None:
+        rect = fitz.Rect(
+            imagen.rect_pt.x0, imagen.rect_pt.y0, imagen.rect_pt.x1, imagen.rect_pt.y1
+        )
+        page.insert_image(
+            rect, filename=str(imagen.ruta), keep_proportion=imagen.conservar_proporcion
+        )
+
+    def imagenes_en(
+        self, documento_id: str, pagina: int
+    ) -> tuple[ImagenEnPagina, ...]:
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+        page = doc[pagina]
+        area_pagina = page.rect.width * page.rect.height
+        encontradas: list[ImagenEnPagina] = []
+        for info in page.get_images(full=True):
+            xref = int(info[0])
+            ancho, alto = int(info[2]), int(info[3])
+            varias = _paginas_con_imagen(doc, xref) > 1
+            for r in page.get_image_rects(xref):
+                cubre = area_pagina > 0 and (r.width * r.height) / area_pagina >= 0.9
+                encontradas.append(
+                    ImagenEnPagina(
+                        xref=xref,
+                        rect_pt=RectanguloPt(r.x0, r.y0, r.x1, r.y1),
+                        ancho_px=ancho,
+                        alto_px=alto,
+                        en_varias_paginas=varias,
+                        cubre_pagina=cubre,
+                    )
+                )
+        return tuple(encontradas)
+
+    def imagen_en(
+        self, documento_id: str, pagina: int, x_pt: float, y_pt: float
+    ) -> ImagenEnPagina | None:
+        punto = fitz.Point(x_pt, y_pt)
+        encontrada: ImagenEnPagina | None = None
+        for img in self.imagenes_en(documento_id, pagina):
+            r = fitz.Rect(
+                img.rect_pt.x0, img.rect_pt.y0, img.rect_pt.x1, img.rect_pt.y1
+            )
+            if r.contains(punto):
+                encontrada = img  # la última (dibujada encima) gana
+        return encontrada
+
+    def eliminar_imagen(
+        self, documento_id: str, pagina: int, imagen: ImagenEnPagina
+    ) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+
+        xref = imagen.xref
+        obj = doc.xref_object(xref, compressed=True)
+        raw = doc.xref_stream_raw(xref)
+        # delete_image borra la imagen allí donde se use (xref compartido): las
+        # páginas afectadas son todas en las que aparece.
+        paginas = _paginas_de_imagen(doc, xref)
+        doc[pagina].delete_image(xref)
+
+        def deshacer() -> None:
+            d = self._registro.obtener(documento_id)
+            d.update_object(xref, obj)
+            d.update_stream(xref, raw, new=False, compress=False)
+
+        def rehacer() -> None:
+            self._registro.obtener(documento_id)[pagina].delete_image(xref)
+
+        self._registro.historial_contenido(documento_id).registrar(
+            OperacionContenido(paginas, deshacer, rehacer)
+        )
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+
     # -- Deshacer / rehacer de contenido ------------------------------------
 
     def puede_deshacer(self, documento_id: str) -> bool:
@@ -283,6 +383,18 @@ def _restaurar(page: fitz.Page, snapshot: _Snapshot) -> None:
     xref, datos = snapshot
     page.parent.update_stream(xref, datos)
     page.set_contents(xref)
+
+
+def _paginas_de_imagen(doc: fitz.Document, xref: int) -> tuple[int, ...]:
+    """Índices de páginas en las que aparece la imagen `xref`."""
+    return tuple(
+        i for i in range(doc.page_count)
+        if any(int(info[0]) == xref for info in doc[i].get_images(full=True))
+    )
+
+
+def _paginas_con_imagen(doc: fitz.Document, xref: int) -> int:
+    return len(_paginas_de_imagen(doc, xref))
 
 
 def _eliminar_por_xref(page: fitz.Page, xref: int) -> None:
