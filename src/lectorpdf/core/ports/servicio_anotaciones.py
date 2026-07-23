@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from lectorpdf.core.domain.anotaciones import TextoNuevo
+from lectorpdf.core.domain.anotaciones import Color, TextoNuevo, TipoMarcado
+from lectorpdf.core.domain.formularios import RectanguloPt
 
 
 @runtime_checkable
@@ -20,6 +21,28 @@ class ServicioAnotaciones(Protocol):
     ) -> None:
         """Estampa `texto` en `pagina` con una fuente OFL embebida. Marca cambios
         sin guardar y registra la operación para deshacer."""
+        ...
+
+    def marcar(
+        self,
+        documento_id: str,
+        pagina: int,
+        rects_pt: tuple[RectanguloPt, ...],
+        tipo: TipoMarcado,
+        color: Color,
+    ) -> None:
+        """Crea una anotación de marcado (resaltado/subrayado/tachado) estándar
+        sobre `rects_pt`. Registra la operación para deshacer."""
+        ...
+
+    def anotacion_en(
+        self, documento_id: str, pagina: int, x_pt: float, y_pt: float
+    ) -> int | None:
+        """Xref de la anotación bajo el punto (para el clic derecho), o None."""
+        ...
+
+    def eliminar_anotacion(self, documento_id: str, pagina: int, xref: int) -> None:
+        """Elimina la anotación `xref` de `pagina`. Acción directa (no deshacible)."""
         ...
 
     def puede_deshacer(self, documento_id: str) -> bool: ...

@@ -10,9 +10,13 @@ import pytest
 from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
-from lectorpdf.core.domain.anotaciones import FuenteTexto, TextoNuevo
+from lectorpdf.core.domain.anotaciones import FuenteTexto, TextoNuevo, TipoMarcado
 from lectorpdf.core.domain.errores import DocumentoFirmado
 from lectorpdf.core.domain.formularios import RectanguloPt
+
+
+def _n_annots(page: fitz.Page) -> int:
+    return len(list(page.annots()))
 
 
 def _pdf(tmp_path: Path) -> Path:
@@ -110,4 +114,60 @@ def test_rechaza_en_documento_firmado(tmp_path: Path) -> None:
 
     with pytest.raises(DocumentoFirmado):
         servicio.anadir_texto(doc_id, 0, _texto())
+    registro.cerrar(doc_id)
+
+
+# -- Tarea 2: marcado y borrado de anotaciones ------------------------------
+
+_RECT = RectanguloPt(50, 60, 200, 75)
+
+
+def test_marcar_crea_anotacion_estandar_y_sobrevive_reabrir(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    servicio.marcar(doc_id, 0, (_RECT,), TipoMarcado.RESALTADO, (1.0, 0.9, 0.2))
+
+    page = registro.obtener(doc_id)[0]
+    assert "Highlight" in [a.type[1] for a in page.annots()]
+    assert registro.tiene(doc_id, Marca.CAMBIOS_SIN_GUARDAR) is True
+
+    salida = tmp_path / "marcado.pdf"
+    page.parent.save(str(salida))
+    registro.cerrar(doc_id)
+    reabierto = fitz.open(salida)
+    assert _n_annots(reabierto[0]) == 1
+    reabierto.close()
+
+
+def test_deshacer_marcado_lo_quita_y_rehacer_lo_devuelve(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    servicio.marcar(doc_id, 0, (_RECT,), TipoMarcado.SUBRAYADO, (0.9, 0.3, 0.3))
+    assert _n_annots(registro.obtener(doc_id)[0]) == 1
+
+    servicio.deshacer(doc_id)
+    assert _n_annots(registro.obtener(doc_id)[0]) == 0
+
+    servicio.rehacer(doc_id)
+    assert _n_annots(registro.obtener(doc_id)[0]) == 1
+    registro.cerrar(doc_id)
+
+
+def test_anotacion_en_localiza_y_eliminar_la_quita(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    servicio.marcar(doc_id, 0, (_RECT,), TipoMarcado.TACHADO, (0.2, 0.2, 0.2))
+
+    xref = servicio.anotacion_en(doc_id, 0, 100.0, 67.0)
+    assert xref is not None
+    assert servicio.anotacion_en(doc_id, 0, 5.0, 5.0) is None  # fuera del rect
+
+    servicio.eliminar_anotacion(doc_id, 0, xref)
+    assert _n_annots(registro.obtener(doc_id)[0]) == 0
+    registro.cerrar(doc_id)
+
+
+def test_marcar_rechaza_en_firmado(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf(tmp_path))
+    registro.marcar(doc_id, Marca.FIRMADO)
+
+    with pytest.raises(DocumentoFirmado):
+        servicio.marcar(doc_id, 0, (_RECT,), TipoMarcado.RESALTADO, (1.0, 0.9, 0.2))
     registro.cerrar(doc_id)

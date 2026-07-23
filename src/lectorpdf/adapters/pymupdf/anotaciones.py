@@ -15,8 +15,13 @@ import fitz
 from lectorpdf.adapters.pymupdf.fuentes import nombre_fuente, ruta_fuente
 from lectorpdf.adapters.pymupdf.historial_contenido import OperacionContenido
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
-from lectorpdf.core.domain.anotaciones import TextoNuevo
+from lectorpdf.core.domain.anotaciones import (
+    Color,
+    TextoNuevo,
+    TipoMarcado,
+)
 from lectorpdf.core.domain.errores import DocumentoFirmado, PaginaFueraDeRango
+from lectorpdf.core.domain.formularios import RectanguloPt
 
 # Snapshot mínimo del contenido de una página: (xref del content stream, bytes).
 _Snapshot = tuple[int, bytes]
@@ -62,6 +67,74 @@ class PyMuPDFAnotaciones:
             fontsize=texto.tamano,
             color=texto.color,
         )
+
+    # -- Marcado sobre selección (anotaciones estándar) ---------------------
+
+    def marcar(
+        self,
+        documento_id: str,
+        pagina: int,
+        rects_pt: tuple[RectanguloPt, ...],
+        tipo: TipoMarcado,
+        color: Color,
+    ) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+
+        ref = [self._crear_marcado(doc[pagina], rects_pt, tipo, color)]
+
+        def deshacer() -> None:
+            _eliminar_por_xref(self._registro.obtener(documento_id)[pagina], ref[0])
+
+        def rehacer() -> None:
+            ref[0] = self._crear_marcado(
+                self._registro.obtener(documento_id)[pagina], rects_pt, tipo, color
+            )
+
+        self._registro.historial_contenido(documento_id).registrar(
+            OperacionContenido((pagina,), deshacer, rehacer)
+        )
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+
+    def _crear_marcado(
+        self,
+        page: fitz.Page,
+        rects_pt: tuple[RectanguloPt, ...],
+        tipo: TipoMarcado,
+        color: Color,
+    ) -> int:
+        rects = [fitz.Rect(r.x0, r.y0, r.x1, r.y1) for r in rects_pt]
+        if tipo is TipoMarcado.RESALTADO:
+            annot = page.add_highlight_annot(rects)
+        elif tipo is TipoMarcado.SUBRAYADO:
+            annot = page.add_underline_annot(rects)
+        else:
+            annot = page.add_strikeout_annot(rects)
+        annot.set_colors(stroke=color)
+        annot.update()
+        return int(annot.xref)
+
+    def anotacion_en(
+        self, documento_id: str, pagina: int, x_pt: float, y_pt: float
+    ) -> int | None:
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+        punto = fitz.Point(x_pt, y_pt)
+        encontrada: int | None = None
+        for annot in doc[pagina].annots():
+            if annot.rect.contains(punto):
+                encontrada = int(annot.xref)  # el último dibujado (arriba) gana
+        return encontrada
+
+    def eliminar_anotacion(
+        self, documento_id: str, pagina: int, xref: int
+    ) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+        _eliminar_por_xref(doc[pagina], xref)
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
     # -- Deshacer / rehacer de contenido ------------------------------------
 
@@ -113,3 +186,10 @@ def _restaurar(page: fitz.Page, snapshot: _Snapshot) -> None:
     xref, datos = snapshot
     page.parent.update_stream(xref, datos)
     page.set_contents(xref)
+
+
+def _eliminar_por_xref(page: fitz.Page, xref: int) -> None:
+    for annot in page.annots():
+        if annot.xref == xref:
+            page.delete_annot(annot)
+            return
