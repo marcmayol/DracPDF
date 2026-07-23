@@ -11,12 +11,13 @@ from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.anotaciones import (
+    Correccion,
     FuenteTexto,
     Nota,
     TextoNuevo,
     TipoMarcado,
 )
-from lectorpdf.core.domain.errores import DocumentoFirmado
+from lectorpdf.core.domain.errores import DocumentoFirmado, TextoNoCabe
 from lectorpdf.core.domain.formularios import RectanguloPt
 
 
@@ -204,4 +205,91 @@ def test_deshacer_nota_la_quita(tmp_path: Path) -> None:
 
     servicio.deshacer(doc_id)
     assert _n_annots(registro.obtener(doc_id)[0]) == 0
+    registro.cerrar(doc_id)
+
+
+# -- Tareas 6-7: corrección de texto ----------------------------------------
+
+
+def _pdf_texto(tmp_path: Path) -> Path:
+    ruta = tmp_path / "t.pdf"
+    doc = fitz.open()
+    p = doc.new_page(width=420, height=200)
+    p.insert_text((40, 90), "El pago es CINCUENTA euros exactos.", fontsize=13)
+    doc.save(ruta)
+    doc.close()
+    return ruta
+
+
+def _rect_pt_de(registro: RegistroDocumentos, doc_id: str, tramo: str) -> RectanguloPt:
+    r = registro.obtener(doc_id)[0].search_for(tramo)[0]
+    return RectanguloPt(r.x0, r.y0, r.x1, r.y1)
+
+
+def test_corregir_elimina_original_y_escribe_nuevo(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf_texto(tmp_path))
+    rect = _rect_pt_de(registro, doc_id, "CINCUENTA")
+    servicio.corregir_texto(
+        doc_id, 0, Correccion(rect, "OCHENTA", FuenteTexto.SERIF, (0.0, 0.0, 0.0))
+    )
+    salida = tmp_path / "corr.pdf"
+    registro.obtener(doc_id).save(str(salida))
+    registro.cerrar(doc_id)
+
+    reabierto = fitz.open(salida)
+    texto = _texto_de(reabierto[0])
+    assert "CINCUENTA" not in texto  # original realmente eliminado
+    assert "OCHENTA" in texto
+    assert _fuente_embebida(reabierto[0]) is True
+    reabierto.close()
+
+
+def test_cabe_texto_detecta_ancho(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf_texto(tmp_path))
+    rect = _rect_pt_de(registro, doc_id, "CINCUENTA")
+    assert servicio.cabe_texto(doc_id, 0, rect, "OCHENTA", FuenteTexto.SERIF) is True
+    assert (
+        servicio.cabe_texto(doc_id, 0, rect, "PALABRALARGUISIMAQUENOCABE", FuenteTexto.SERIF)
+        is False
+    )
+    registro.cerrar(doc_id)
+
+
+def test_no_cabe_lanza_y_reducir_encaja(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf_texto(tmp_path))
+    rect = _rect_pt_de(registro, doc_id, "CINCUENTA")
+    largo = "PALABRALARGUISIMAQUENOCABE"
+
+    with pytest.raises(TextoNoCabe):
+        servicio.corregir_texto(
+            doc_id, 0, Correccion(rect, largo, FuenteTexto.SANS, (0.0, 0.0, 0.0))
+        )
+    servicio.corregir_texto(
+        doc_id, 0, Correccion(rect, largo, FuenteTexto.SANS, (0.0, 0.0, 0.0), reducir=True)
+    )
+    assert largo in _texto_de(registro.obtener(doc_id)[0])
+    registro.cerrar(doc_id)
+
+
+def test_deshacer_correccion_restaura_el_original(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf_texto(tmp_path))
+    rect = _rect_pt_de(registro, doc_id, "CINCUENTA")
+    servicio.corregir_texto(
+        doc_id, 0, Correccion(rect, "OCHENTA", FuenteTexto.SERIF, (0.0, 0.0, 0.0))
+    )
+    assert "CINCUENTA" not in _texto_de(registro.obtener(doc_id)[0])
+
+    servicio.deshacer(doc_id)
+    assert "CINCUENTA" in _texto_de(registro.obtener(doc_id)[0])
+    registro.cerrar(doc_id)
+
+
+def test_corregir_rechaza_en_firmado(tmp_path: Path) -> None:
+    servicio, doc_id, registro = _abrir(_pdf_texto(tmp_path))
+    rect = _rect_pt_de(registro, doc_id, "CINCUENTA")
+    registro.marcar(doc_id, Marca.FIRMADO)
+    with pytest.raises(DocumentoFirmado):
+        servicio.corregir_texto(
+            doc_id, 0, Correccion(rect, "OCHENTA", FuenteTexto.SERIF, (0.0, 0.0, 0.0))
+        )
     registro.cerrar(doc_id)

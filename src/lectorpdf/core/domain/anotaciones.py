@@ -56,13 +56,16 @@ class Nota:
 @dataclass(frozen=True)
 class Correccion:
     """Sustitución acotada de un tramo de una línea: se redacta el original y se
-    escribe `texto_nuevo` en su rectángulo con una fuente sustituta embebida."""
+    escribe `texto_nuevo` en su rectángulo con una fuente sustituta embebida. El
+    tamaño se deriva de la altura del rectángulo para casar con el original; si el
+    texto nuevo no cabe a lo ancho, `reducir=True` lo encoge para que quepa (si no,
+    el servicio lanza `TextoNoCabe`)."""
 
     rect_pt: RectanguloPt
     texto_nuevo: str
     fuente: FuenteTexto
-    tamano: float
     color: Color
+    reducir: bool = False
 
 
 @dataclass(frozen=True)

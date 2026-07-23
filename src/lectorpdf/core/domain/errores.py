@@ -43,6 +43,11 @@ class DocumentoFirmado(ErrorDominio):
     """Se intenta editar un documento ya firmado (edición bloqueada)."""
 
 
+class TextoNoCabe(ErrorDominio):
+    """El texto de sustitución no cabe en el ancho disponible al tamaño que casa
+    con el original; hay que reducir el tamaño o cancelar."""
+
+
 class CredencialInvalida(ErrorDominio):
     """La credencial de firma no es válida (p. ej. el .p12 no existe)."""
 

@@ -10,7 +10,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from lectorpdf.core.domain.anotaciones import Color, Nota, TextoNuevo, TipoMarcado
+from lectorpdf.core.domain.anotaciones import (
+    Color,
+    Correccion,
+    FuenteTexto,
+    Nota,
+    TextoNuevo,
+    TipoMarcado,
+)
 from lectorpdf.core.domain.formularios import RectanguloPt
 
 
@@ -47,6 +54,26 @@ class ServicioAnotaciones(Protocol):
 
     def eliminar_anotacion(self, documento_id: str, pagina: int, xref: int) -> None:
         """Elimina la anotación `xref` de `pagina`. Acción directa (no deshacible)."""
+        ...
+
+    def cabe_texto(
+        self,
+        documento_id: str,
+        pagina: int,
+        rect_pt: RectanguloPt,
+        texto: str,
+        fuente: FuenteTexto,
+    ) -> bool:
+        """True si `texto` cabe a lo ancho de `rect_pt` al tamaño que casa con la
+        altura del tramo (para avisar del caso "no cabe" antes de corregir)."""
+        ...
+
+    def corregir_texto(
+        self, documento_id: str, pagina: int, correccion: Correccion
+    ) -> None:
+        """Redacta el tramo (elimina de verdad el original) y escribe el texto
+        nuevo en su sitio con fuente sustituta embebida, casando el tamaño con la
+        altura del tramo. Lanza `TextoNoCabe` si no cabe y `reducir=False`."""
         ...
 
     def puede_deshacer(self, documento_id: str) -> bool: ...

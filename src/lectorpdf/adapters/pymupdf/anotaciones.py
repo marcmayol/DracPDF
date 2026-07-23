@@ -17,11 +17,17 @@ from lectorpdf.adapters.pymupdf.historial_contenido import OperacionContenido
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
 from lectorpdf.core.domain.anotaciones import (
     Color,
+    Correccion,
+    FuenteTexto,
     Nota,
     TextoNuevo,
     TipoMarcado,
 )
-from lectorpdf.core.domain.errores import DocumentoFirmado, PaginaFueraDeRango
+from lectorpdf.core.domain.errores import (
+    DocumentoFirmado,
+    PaginaFueraDeRango,
+    TextoNoCabe,
+)
 from lectorpdf.core.domain.formularios import RectanguloPt
 
 # Snapshot mínimo del contenido de una página: (xref del content stream, bytes).
@@ -160,6 +166,73 @@ class PyMuPDFAnotaciones:
         _eliminar_por_xref(doc[pagina], xref)
         self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
 
+    # -- Corrección de texto (Parte B) --------------------------------------
+
+    def cabe_texto(
+        self,
+        documento_id: str,
+        pagina: int,
+        rect_pt: RectanguloPt,
+        texto: str,
+        fuente: FuenteTexto,
+    ) -> bool:
+        _font, _r, _tam, _ancho, cabe = _metricas(rect_pt, texto, fuente)
+        return cabe
+
+    def corregir_texto(
+        self, documento_id: str, pagina: int, correccion: Correccion
+    ) -> None:
+        self._exigir_editable(documento_id)
+        doc = self._registro.obtener(documento_id)
+        self._exigir_pagina(doc, pagina)
+
+        font, r, tam, ancho, cabe = _metricas(
+            correccion.rect_pt, correccion.texto_nuevo, correccion.fuente
+        )
+        if not cabe:
+            if not correccion.reducir:
+                raise TextoNoCabe(
+                    "El texto nuevo no cabe: reduce el tamaño o cancela"
+                )
+            tam = tam * r.width / ancho  # encoger para que quepa a lo ancho
+
+        antes = _snapshot(doc[pagina])
+        self._aplicar_correccion(doc[pagina], r, correccion, font, tam)
+
+        def deshacer() -> None:
+            _restaurar(self._registro.obtener(documento_id)[pagina], antes)
+
+        def rehacer() -> None:
+            self._aplicar_correccion(
+                self._registro.obtener(documento_id)[pagina], r, correccion, font, tam
+            )
+
+        self._registro.historial_contenido(documento_id).registrar(
+            OperacionContenido((pagina,), deshacer, rehacer)
+        )
+        self._registro.marcar(documento_id, Marca.CAMBIOS_SIN_GUARDAR)
+
+    def _aplicar_correccion(
+        self,
+        page: fitz.Page,
+        r: fitz.Rect,
+        correccion: Correccion,
+        font: fitz.Font,
+        tam: float,
+    ) -> None:
+        page.add_redact_annot(r)
+        page.apply_redactions()
+        nombre = nombre_fuente(correccion.fuente)
+        page.insert_font(fontname=nombre, fontfile=ruta_fuente(correccion.fuente))
+        baseline = fitz.Point(r.x0, r.y1 + font.descender * tam)
+        page.insert_text(
+            baseline,
+            correccion.texto_nuevo,
+            fontname=nombre,
+            fontsize=tam,
+            color=correccion.color,
+        )
+
     # -- Deshacer / rehacer de contenido ------------------------------------
 
     def puede_deshacer(self, documento_id: str) -> bool:
@@ -217,3 +290,16 @@ def _eliminar_por_xref(page: fitz.Page, xref: int) -> None:
         if annot.xref == xref:
             page.delete_annot(annot)
             return
+
+
+def _metricas(
+    rect_pt: RectanguloPt, texto: str, fuente: FuenteTexto
+) -> tuple[fitz.Font, fitz.Rect, float, float, bool]:
+    """(fuente, rect, tamaño que casa la altura, ancho del nuevo, ¿cabe a lo ancho?)."""
+    font = fitz.Font(fontfile=ruta_fuente(fuente))
+    r = fitz.Rect(rect_pt.x0, rect_pt.y0, rect_pt.x1, rect_pt.y1)
+    alto_em = font.ascender - font.descender
+    tam = r.height / alto_em if alto_em else 12.0
+    ancho = font.text_length(texto, fontsize=tam)
+    cabe = ancho <= r.width + 0.5
+    return font, r, tam, ancho, cabe
