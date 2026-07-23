@@ -36,6 +36,7 @@ _ESPERADAS: dict[str, str | None] = {
     "Subrayar": None,
     "Tachar": None,
     "Nota adhesiva…": None,
+    "Corregir texto…": None,
     "Buscar…": "Ctrl+F",
     "Ir a página…": "Ctrl+G",
     # Ver
@@ -176,7 +177,10 @@ def test_anadir_texto_deshabilitado_sin_documento_o_firmado(
     ventana = MainWindow()
     try:
         acciones = _acciones_por_texto(ventana)
-        edicion = ("Añadir texto…", "Resaltar", "Subrayar", "Tachar", "Nota adhesiva…")
+        edicion = (
+            "Añadir texto…", "Resaltar", "Subrayar", "Tachar",
+            "Nota adhesiva…", "Corregir texto…",
+        )
         assert not any(acciones[t].isEnabled() for t in edicion)  # type: ignore[attr-defined]
 
         doc = ventana.abrir_ruta(_pdf_min(tmp_path))

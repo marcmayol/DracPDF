@@ -55,10 +55,21 @@ from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
-from lectorpdf.core.domain.anotaciones import Color, Nota, TipoMarcado
+from lectorpdf.core.domain.anotaciones import (
+    Color,
+    Correccion,
+    FuenteTexto,
+    Nota,
+    TipoMarcado,
+)
 from lectorpdf.core.domain.contenido import Coincidencia
-from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
+from lectorpdf.core.domain.errores import (
+    ErrorDominio,
+    FormularioXFANoSoportado,
+    TextoNoCabe,
+)
 from lectorpdf.core.domain.firma_digital import ConfigFirma
+from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
@@ -67,6 +78,7 @@ from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
+from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
 from lectorpdf.core.use_cases.eliminar_anotacion import EliminarAnotacion
@@ -117,6 +129,7 @@ from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.tareas import ResultadoTarea, ejecutar_con_progreso
+from lectorpdf.ui.texto.dialogo_correccion import DialogoCorreccion
 from lectorpdf.ui.texto.dialogo_texto import DialogoTexto
 from lectorpdf.ui.texto.texto_layer import TextoLayer
 from lectorpdf.ui.theme.barra_titulo import aplicar_modo_oscuro, instalar_gestor
@@ -142,6 +155,16 @@ _COLOR_MARCADO: dict[TipoMarcado, Color] = {
     TipoMarcado.SUBRAYADO: (0.878, 0.325, 0.290),
     TipoMarcado.TACHADO: (0.85, 0.20, 0.20),
 }
+
+
+def _union_rects(rects: tuple[RectanguloPt, ...]) -> RectanguloPt:
+    """Rectángulo que envuelve a todos (el tramo seleccionado en una línea)."""
+    return RectanguloPt(
+        min(r.x0 for r in rects),
+        min(r.y0 for r in rects),
+        max(r.x1 for r in rects),
+        max(r.y1 for r in rects),
+    )
 _CLAVE_DOBLE = "vista/doble_pagina"
 _CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
 _CLAVE_RECIENTES = "archivo/recientes"
@@ -190,6 +213,7 @@ class MainWindow(QMainWindow):
         self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
         self._marcar = MarcarSeleccion(self._servicio_anotaciones)
         self._anadir_nota_uc = AnadirNota(self._servicio_anotaciones)
+        self._corregir = CorregirTexto(self._servicio_anotaciones)
         self._eliminar_anot = EliminarAnotacion(self._servicio_anotaciones)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
@@ -468,6 +492,7 @@ class MainWindow(QMainWindow):
             menu.addAction("Tachar").triggered.connect(
                 lambda: self._marcar_seleccion(TipoMarcado.TACHADO)
             )
+            menu.addAction("Corregir texto…").triggered.connect(self._corregir_texto)
         # Nota adhesiva y eliminar anotación bajo el clic (Fase 9), si editable.
         if pos is not None and not self._doc_firmado():
             menu.addSeparator()
@@ -770,6 +795,9 @@ class MainWindow(QMainWindow):
         )
         self._accion_nota = self._accion_menu(
             menu, "Nota adhesiva…", self._anadir_nota
+        )
+        self._accion_corregir = self._accion_menu(
+            menu, "Corregir texto…", self._corregir_texto
         )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
@@ -1247,6 +1275,59 @@ class MainWindow(QMainWindow):
         self._visor.invalidar_pagina(pagina)
         self._actualizar_banda_firmado()
 
+    def _corregir_texto(self) -> None:
+        doc = self._documento
+        if doc is None or self._doc_firmado():
+            return
+        seleccion = self._vista().capa_seleccion.seleccion_actual()
+        if seleccion is None:
+            QMessageBox.information(
+                self,
+                "Corregir texto",
+                "Selecciona primero el tramo a corregir (en una sola línea).",
+            )
+            return
+        pagina, rects = seleccion
+        original = self._vista().capa_seleccion.texto_seleccionado()
+        dialogo = DialogoCorreccion(original, self)
+        if dialogo.exec() != DialogoCorreccion.DialogCode.Accepted:
+            return
+        if not dialogo.texto_nuevo():
+            return
+        self._ejecutar_correccion(
+            doc, pagina, _union_rects(rects), dialogo.texto_nuevo(), dialogo.fuente()
+        )
+
+    def _ejecutar_correccion(
+        self,
+        doc: Documento,
+        pagina: int,
+        rect: RectanguloPt,
+        nuevo: str,
+        fuente: FuenteTexto,
+        reducir: bool = False,
+    ) -> None:
+        try:
+            self._corregir.ejecutar(
+                doc, pagina, Correccion(rect, nuevo, fuente, (0.0, 0.0, 0.0), reducir)
+            )
+        except TextoNoCabe:
+            resp = QMessageBox.question(
+                self,
+                "El texto no cabe",
+                "El texto nuevo no cabe al tamaño del original. ¿Reducir el "
+                "tamaño para que quepa?",
+            )
+            if resp == QMessageBox.StandardButton.Yes:
+                self._ejecutar_correccion(doc, pagina, rect, nuevo, fuente, reducir=True)
+            return
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo corregir", str(exc))
+            return
+        self._vista().capa_seleccion.limpiar()
+        self._visor.invalidar_pagina(pagina)
+        self._actualizar_banda_firmado()
+
     def _confirmar_firma(self) -> None:
         if self._capa_sello.colocando():
             try:
@@ -1593,6 +1674,7 @@ class MainWindow(QMainWindow):
             self._accion_subrayar,
             self._accion_tachar,
             self._accion_nota,
+            self._accion_corregir,
         ):
             accion.setEnabled(editable)
 

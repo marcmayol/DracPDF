@@ -806,6 +806,31 @@ def test_deshacer_desde_menu_revierte_texto_anadido(
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def test_corregir_texto_desde_handler_elimina_original(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.core.domain.anotaciones import FuenteTexto
+    from lectorpdf.core.domain.formularios import RectanguloPt
+
+    ruta = tmp_path / "c.pdf"
+    d = fitz.open()
+    d.new_page().insert_text((40, 90), "El total es MIL pesetas", fontsize=13)
+    d.save(ruta)
+    d.close()
+
+    ventana = MainWindow()
+    try:
+        doc = ventana.abrir_ruta(ruta)
+        r = ventana._registro.obtener(doc.id)[0].search_for("MIL")[0]
+        rect = RectanguloPt(r.x0, r.y0, r.x1, r.y1)
+        ventana._ejecutar_correccion(doc, 0, rect, "DOS", FuenteTexto.SERIF)
+        texto = ventana._registro.obtener(doc.id)[0].get_text()
+        assert "MIL" not in texto
+        assert "DOS" in texto
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_marcar_seleccion_y_deshacer_desde_menu(
     qapp: object, tmp_path: Path
 ) -> None:
