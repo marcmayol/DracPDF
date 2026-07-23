@@ -31,6 +31,7 @@ _ESPERADAS: dict[str, str | None] = {
     "Rehacer": "Ctrl+Y",
     "Copiar": "Ctrl+C",
     "Seleccionar todo": "Ctrl+E",
+    "Añadir texto…": None,
     "Buscar…": "Ctrl+F",
     "Ir a página…": "Ctrl+G",
     # Ver
@@ -158,5 +159,27 @@ def test_conversiones_salientes_deshabilitadas_sin_documento(
         ventana.abrir_ruta(_pdf_min(tmp_path))
         acciones = _acciones_por_texto(ventana)
         assert all(acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
+def test_anadir_texto_deshabilitado_sin_documento_o_firmado(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.adapters.pymupdf.registro import Marca
+    from lectorpdf.ui import main_window as mw
+
+    ventana = MainWindow()
+    try:
+        acciones = _acciones_por_texto(ventana)
+        assert acciones["Añadir texto…"].isEnabled() is False  # type: ignore[attr-defined]
+
+        doc = ventana.abrir_ruta(_pdf_min(tmp_path))
+        assert acciones["Añadir texto…"].isEnabled() is True  # type: ignore[attr-defined]
+
+        # Documento firmado: la edición de contenido se deshabilita.
+        ventana._registro.marcar(doc.id, Marca.FIRMADO)
+        ventana._actualizar_acciones_documento()
+        assert acciones["Añadir texto…"].isEnabled() is False  # type: ignore[attr-defined]
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)

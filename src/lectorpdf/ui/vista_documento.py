@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.modelos import Documento
+from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
@@ -30,6 +31,7 @@ from lectorpdf.ui.seleccion.seleccion_layer import SeleccionLayer
 from lectorpdf.ui.signature.digital_seal_layer import DigitalSealLayer
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.tareas import ejecutar_con_progreso
+from lectorpdf.ui.texto.texto_layer import TextoLayer
 from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 
 
@@ -52,6 +54,7 @@ class VistaDocumento(QWidget):
         rellenar: RellenarCampo,
         estampar: EstamparFirma,
         firmar_digital: FirmarDigitalmente,
+        anadir_texto: AnadirTexto,
         buscar: BuscarEnDocumento,
         palabras: ObtenerPalabras,
         enlaces: ObtenerEnlaces,
@@ -65,6 +68,7 @@ class VistaDocumento(QWidget):
         self.capa_form = FormLayer(self.visor, rellenar)
         self.capa_firma = SignatureLayer(self.visor, estampar)
         self.capa_sello = DigitalSealLayer(self.visor, firmar_digital)
+        self.capa_texto = TextoLayer(self.visor, anadir_texto)
         self.capa_busqueda = BusquedaLayer(self.visor)
         self.capa_seleccion = SeleccionLayer(self.visor, palabras)
         self.capa_enlaces = EnlacesLayer(self.visor, enlaces)

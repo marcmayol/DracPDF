@@ -774,6 +774,38 @@ def test_control_zoom_ajusta_escala_al_escribir(qapp: object, tmp_path: Path) ->
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def _texto_pagina(ventana: MainWindow, doc_id: str) -> str:
+    return ventana._registro.obtener(doc_id)[0].get_text().replace("\xa0", " ")
+
+
+def test_deshacer_desde_menu_revierte_texto_anadido(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.core.domain.anotaciones import FuenteTexto, TextoNuevo
+    from lectorpdf.core.domain.formularios import RectanguloPt
+
+    ventana = MainWindow()
+    try:
+        doc = ventana.abrir_ruta(_pdf(tmp_path, paginas=1))
+        texto = TextoNuevo(
+            RectanguloPt(40, 40, 300, 90),
+            "Texto de prueba",
+            FuenteTexto.SANS,
+            14.0,
+            (0.0, 0.0, 0.0),
+        )
+        ventana._anadir_texto.ejecutar(doc, 0, texto)
+        assert "Texto de prueba" in _texto_pagina(ventana, doc.id)
+
+        ventana._deshacer()  # desde el handler del menú Edición
+        assert "Texto de prueba" not in _texto_pagina(ventana, doc.id)
+
+        ventana._rehacer()
+        assert "Texto de prueba" in _texto_pagina(ventana, doc.id)
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_estado_vacio_al_arrancar_y_paneles_ocultos(qapp: object) -> None:
     ventana = MainWindow()
     try:

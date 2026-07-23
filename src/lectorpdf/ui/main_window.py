@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 )
 
 from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
+from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.contenido import PyMuPDFContenido
 from lectorpdf.adapters.pymupdf.conversor import ConversorFitz
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
@@ -60,6 +61,7 @@ from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
+from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
@@ -111,6 +113,8 @@ from lectorpdf.ui.signature.signature_dialog import SignatureDialog
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
 from lectorpdf.ui.signature.verification_panel import VerificationPanel
 from lectorpdf.ui.tareas import ResultadoTarea, ejecutar_con_progreso
+from lectorpdf.ui.texto.dialogo_texto import DialogoTexto
+from lectorpdf.ui.texto.texto_layer import TextoLayer
 from lectorpdf.ui.theme.barra_titulo import aplicar_modo_oscuro, instalar_gestor
 from lectorpdf.ui.theme.estilos import (
     AJUSTES_APP,
@@ -161,6 +165,7 @@ class MainWindow(QMainWindow):
         self._servicio_firma = PyHankoSignatureService(self._registro)
         self._servicio_herr = PyMuPDFHerramientas(self._registro)
         self._servicio_contenido = PyMuPDFContenido(self._registro)
+        self._servicio_anotaciones = PyMuPDFAnotaciones(self._registro)
         self._conversor = ConversorFitz(self._registro)
         self._conversor_word = ConversorWordQt()
 
@@ -171,6 +176,7 @@ class MainWindow(QMainWindow):
         self._guardar_form = GuardarFormulario(self._servicio_form)
         self._historial_form = HistorialFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
+        self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
         self._unir = UnirPdf(self._servicio_herr)
@@ -280,6 +286,10 @@ class MainWindow(QMainWindow):
         return self._vista().capa_sello
 
     @property
+    def _capa_texto(self) -> TextoLayer:
+        return self._vista().capa_texto
+
+    @property
     def _capa_busqueda(self) -> BusquedaLayer:
         return self._vista().capa_busqueda
 
@@ -358,6 +368,7 @@ class MainWindow(QMainWindow):
             rellenar=self._rellenar,
             estampar=self._estampar,
             firmar_digital=self._firmar_digital,
+            anadir_texto=self._anadir_texto,
             buscar=self._buscar_contenido,
             palabras=self._obtener_palabras,
             enlaces=self._obtener_enlaces,
@@ -678,7 +689,11 @@ class MainWindow(QMainWindow):
         self._estado_zoom.setText(f"{round(self._visor.escala * 100)} %")
 
     def _colocando_firma(self) -> bool:
-        return self._capa_firma.colocando() or self._capa_sello.colocando()
+        return (
+            self._capa_firma.colocando()
+            or self._capa_sello.colocando()
+            or self._capa_texto.colocando()
+        )
 
     def _actualizar_controles_firma(self) -> None:
         """Muestra la barra contextual solo mientras se coloca una firma/sello."""
@@ -701,6 +716,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Copiar", self._copiar_seleccion, "Ctrl+C")
         self._accion_menu(menu, "Seleccionar todo", self._seleccionar_todo, "Ctrl+E")
+        menu.addSeparator()
+        self._accion_texto = self._accion_menu(
+            menu, "Añadir texto…", self._iniciar_texto
+        )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
         self._accion_menu(menu, "Ir a página…", self._ir_a_pagina_dialogo, "Ctrl+G")
@@ -1064,6 +1083,23 @@ class MainWindow(QMainWindow):
             self._capa_firma.iniciar_colocacion(self._documento, png)
             self._actualizar_controles_firma()  # entra en modo colocación
 
+    def _iniciar_texto(self) -> None:
+        if self._documento is None or self._doc_firmado():
+            return
+        dialogo = DialogoTexto(self)
+        if dialogo.exec() != DialogoTexto.DialogCode.Accepted:
+            return
+        if not dialogo.texto():
+            return
+        self._capa_texto.iniciar_colocacion(
+            self._documento,
+            dialogo.texto(),
+            dialogo.fuente(),
+            dialogo.tamano(),
+            dialogo.color(),
+        )
+        self._actualizar_controles_firma()
+
     def _confirmar_firma(self) -> None:
         if self._capa_sello.colocando():
             try:
@@ -1072,6 +1108,14 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "No se pudo firmar", str(exc))
                 return
             self._tras_firmar()
+            self._actualizar_controles_firma()
+            return
+        if self._capa_texto.colocando():
+            try:
+                self._capa_texto.confirmar()
+            except ErrorDominio as exc:
+                QMessageBox.warning(self, "No se pudo añadir el texto", str(exc))
+            self._actualizar_banda_firmado()
             self._actualizar_controles_firma()
             return
         try:
@@ -1083,6 +1127,7 @@ class MainWindow(QMainWindow):
     def _cancelar_colocacion(self) -> None:
         self._capa_firma.cancelar()
         self._capa_sello.cancelar()
+        self._capa_texto.cancelar()
         self._actualizar_controles_firma()
 
     def _firmar_digitalmente(self) -> None:
@@ -1393,6 +1438,12 @@ class MainWindow(QMainWindow):
         ):
             accion.setEnabled(hay)
         self._accion_form.setEnabled(hay and self._capa_form.tiene_campos())
+        # Edición de contenido (Fase 9): solo con documento y no firmado.
+        self._accion_texto.setEnabled(hay and not self._doc_firmado())
+
+    def _doc_firmado(self) -> bool:
+        doc = self._documento
+        return doc is not None and self._guardar_form.esta_firmado(doc)
 
     def _ir_al_formulario(self) -> None:
         """Salta a la primera página con campos de formulario."""
@@ -1665,17 +1716,35 @@ class MainWindow(QMainWindow):
     def _copiar_seleccion(self) -> None:
         self._vista().capa_seleccion.copiar()
 
-    # -- Deshacer / rehacer en formularios ----------------------------------
+    # -- Deshacer / rehacer (formularios + contenido de la Fase 9) ----------
 
     def _deshacer(self) -> None:
         doc = self._documento
-        if doc is not None and self._historial_form.deshacer(doc) is not None:
+        if doc is None:
+            return
+        # Contenido (texto/anotaciones/imágenes) primero: es lo más reciente en su
+        # flujo; si no hay, se prueba el historial de formularios.
+        if self._servicio_anotaciones.puede_deshacer(doc.id):
+            paginas = self._servicio_anotaciones.deshacer(doc.id)
+            self._invalidar_paginas(paginas)
+            self._actualizar_banda_firmado()
+        elif self._historial_form.deshacer(doc) is not None:
             self._cargar_formulario(doc)  # el documento es la fuente de verdad
 
     def _rehacer(self) -> None:
         doc = self._documento
-        if doc is not None and self._historial_form.rehacer(doc) is not None:
+        if doc is None:
+            return
+        if self._servicio_anotaciones.puede_rehacer(doc.id):
+            paginas = self._servicio_anotaciones.rehacer(doc.id)
+            self._invalidar_paginas(paginas)
+            self._actualizar_banda_firmado()
+        elif self._historial_form.rehacer(doc) is not None:
             self._cargar_formulario(doc)
+
+    def _invalidar_paginas(self, paginas: tuple[int, ...] | None) -> None:
+        for pagina in paginas or ():
+            self._visor.invalidar_pagina(pagina)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # Todas las pestañas con cambios sin guardar se resuelven en un aviso.
