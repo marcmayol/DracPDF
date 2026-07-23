@@ -55,6 +55,7 @@ from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
+from lectorpdf.core.domain.anotaciones import Color, TipoMarcado
 from lectorpdf.core.domain.contenido import Coincidencia
 from lectorpdf.core.domain.errores import ErrorDominio, FormularioXFANoSoportado
 from lectorpdf.core.domain.firma_digital import ConfigFirma
@@ -67,6 +68,7 @@ from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
 from lectorpdf.core.use_cases.dividir_pdf import DividirPdf
+from lectorpdf.core.use_cases.eliminar_anotacion import EliminarAnotacion
 from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, ExportarImagenes
@@ -75,6 +77,7 @@ from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
 from lectorpdf.core.use_cases.historial_formulario import HistorialFormulario
 from lectorpdf.core.use_cases.listar_campos import ListarCampos
+from lectorpdf.core.use_cases.marcar_seleccion import MarcarSeleccion
 from lectorpdf.core.use_cases.obtener_enlaces import ObtenerEnlaces
 from lectorpdf.core.use_cases.obtener_indice import ObtenerIndice
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
@@ -131,6 +134,13 @@ from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
 from lectorpdf.ui.vista_documento import VistaDocumento
 
 _TITULO_BASE = NOMBRE_APP
+
+# Colores de marcado (tokens semánticos): ámbar, acento, rojo.
+_COLOR_MARCADO: dict[TipoMarcado, Color] = {
+    TipoMarcado.RESALTADO: (1.0, 0.86, 0.25),
+    TipoMarcado.SUBRAYADO: (0.878, 0.325, 0.290),
+    TipoMarcado.TACHADO: (0.85, 0.20, 0.20),
+}
 _CLAVE_DOBLE = "vista/doble_pagina"
 _CLAVE_MODO_AJUSTE = "vista/modo_ajuste"
 _CLAVE_RECIENTES = "archivo/recientes"
@@ -177,6 +187,8 @@ class MainWindow(QMainWindow):
         self._historial_form = HistorialFormulario(self._servicio_form)
         self._estampar = EstamparFirma(self._servicio_estampado)
         self._anadir_texto = AnadirTexto(self._servicio_anotaciones)
+        self._marcar = MarcarSeleccion(self._servicio_anotaciones)
+        self._eliminar_anot = EliminarAnotacion(self._servicio_anotaciones)
         self._firmar_digital = FirmarDigitalmente(self._servicio_firma)
         self._verificar = VerificarFirmas(self._servicio_firma)
         self._unir = UnirPdf(self._servicio_herr)
@@ -427,18 +439,41 @@ class MainWindow(QMainWindow):
         self._cerrar_pestana(self._pestanas.currentIndex())
 
     def _menu_contextual_pagina(self, vista: VistaDocumento, pos: QPoint) -> None:
-        menu = self._construir_menu_contextual(vista)
+        menu = self._construir_menu_contextual(vista, pos)
         viewport = vista.visor.viewport()
         if viewport is not None:
             menu.exec(viewport.mapToGlobal(pos))
 
-    def _construir_menu_contextual(self, vista: VistaDocumento) -> QMenu:
+    def _construir_menu_contextual(
+        self, vista: VistaDocumento, pos: QPoint | None = None
+    ) -> QMenu:
         """Menú contextual de la página. Aislado para poder testearlo sin exec."""
         menu = QMenu(self)
         copiar = menu.addAction("Copiar")
-        copiar.setEnabled(bool(vista.capa_seleccion.texto_seleccionado()))
+        hay_seleccion = bool(vista.capa_seleccion.texto_seleccionado())
+        copiar.setEnabled(hay_seleccion)
         copiar.triggered.connect(vista.capa_seleccion.copiar)
         menu.addAction("Seleccionar todo").triggered.connect(self._seleccionar_todo)
+        # Marcado sobre la selección (Fase 9), solo si hay selección y es editable.
+        if hay_seleccion and not self._doc_firmado():
+            menu.addSeparator()
+            menu.addAction("Resaltar").triggered.connect(
+                lambda: self._marcar_seleccion(TipoMarcado.RESALTADO)
+            )
+            menu.addAction("Subrayar").triggered.connect(
+                lambda: self._marcar_seleccion(TipoMarcado.SUBRAYADO)
+            )
+            menu.addAction("Tachar").triggered.connect(
+                lambda: self._marcar_seleccion(TipoMarcado.TACHADO)
+            )
+        # Eliminar la anotación bajo el clic (Fase 9), si la hay y es editable.
+        if pos is not None and not self._doc_firmado() and (
+            self._anotacion_bajo(vista, pos) is not None
+        ):
+            menu.addSeparator()
+            menu.addAction("Eliminar anotación").triggered.connect(
+                lambda: self._eliminar_anotacion_en(vista, pos)
+            )
         menu.addSeparator()
         menu.addAction("Buscar…").triggered.connect(self._activar_busqueda)
         menu.addAction("Ir a página…").triggered.connect(self._ir_a_pagina_dialogo)
@@ -719,6 +754,15 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_texto = self._accion_menu(
             menu, "Añadir texto…", self._iniciar_texto
+        )
+        self._accion_resaltar = self._accion_menu(
+            menu, "Resaltar", lambda: self._marcar_seleccion(TipoMarcado.RESALTADO)
+        )
+        self._accion_subrayar = self._accion_menu(
+            menu, "Subrayar", lambda: self._marcar_seleccion(TipoMarcado.SUBRAYADO)
+        )
+        self._accion_tachar = self._accion_menu(
+            menu, "Tachar", lambda: self._marcar_seleccion(TipoMarcado.TACHADO)
         )
         menu.addSeparator()
         self._accion_menu(menu, "Buscar…", self._activar_busqueda, "Ctrl+F")
@@ -1100,6 +1144,61 @@ class MainWindow(QMainWindow):
         )
         self._actualizar_controles_firma()
 
+    def _marcar_seleccion(self, tipo: TipoMarcado) -> None:
+        doc = self._documento
+        if doc is None or self._doc_firmado():
+            return
+        seleccion = self._vista().capa_seleccion.seleccion_actual()
+        if seleccion is None:
+            return
+        pagina, rects = seleccion
+        try:
+            self._marcar.ejecutar(doc, pagina, rects, tipo, _COLOR_MARCADO[tipo])
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo marcar", str(exc))
+            return
+        self._vista().capa_seleccion.limpiar()
+        self._visor.invalidar_pagina(pagina)
+        self._actualizar_banda_firmado()
+
+    def _eliminar_anotacion_en(self, vista: VistaDocumento, pos: QPoint) -> None:
+        """Elimina la anotación bajo `pos` (clic derecho), si la hay."""
+        doc = vista.documento
+        if doc is None or self._doc_firmado():
+            return
+        objetivo = self._anotacion_bajo(vista, pos)
+        if objetivo is None:
+            return
+        pagina, xref = objetivo
+        try:
+            self._eliminar_anot.ejecutar(doc, pagina, xref)
+        except ErrorDominio as exc:
+            QMessageBox.warning(self, "No se pudo eliminar", str(exc))
+            return
+        vista.visor.invalidar_pagina(pagina)
+
+    def _anotacion_bajo(
+        self, vista: VistaDocumento, pos: QPoint
+    ) -> tuple[int, int] | None:
+        """(página, xref) de la anotación bajo el punto de la vista, o None."""
+        doc = vista.documento
+        if doc is None:
+            return None
+        vp = vista.visor.viewport()
+        escena = vista.visor.mapToScene(pos) if vp is not None else None
+        if escena is None:
+            return None
+        pagina = vista.visor.pagina_en_punto(escena)
+        if pagina is None:
+            return None
+        rect_pagina = vista.visor.rect_pagina(pagina)
+        if rect_pagina is None:
+            return None
+        x_pt = (escena.x() - rect_pagina.left()) / vista.visor.escala
+        y_pt = (escena.y() - rect_pagina.top()) / vista.visor.escala
+        xref = self._servicio_anotaciones.anotacion_en(doc.id, pagina, x_pt, y_pt)
+        return (pagina, xref) if xref is not None else None
+
     def _confirmar_firma(self) -> None:
         if self._capa_sello.colocando():
             try:
@@ -1439,7 +1538,14 @@ class MainWindow(QMainWindow):
             accion.setEnabled(hay)
         self._accion_form.setEnabled(hay and self._capa_form.tiene_campos())
         # Edición de contenido (Fase 9): solo con documento y no firmado.
-        self._accion_texto.setEnabled(hay and not self._doc_firmado())
+        editable = hay and not self._doc_firmado()
+        for accion in (
+            self._accion_texto,
+            self._accion_resaltar,
+            self._accion_subrayar,
+            self._accion_tachar,
+        ):
+            accion.setEnabled(editable)
 
     def _doc_firmado(self) -> bool:
         doc = self._documento

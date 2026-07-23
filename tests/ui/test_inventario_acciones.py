@@ -32,6 +32,9 @@ _ESPERADAS: dict[str, str | None] = {
     "Copiar": "Ctrl+C",
     "Seleccionar todo": "Ctrl+E",
     "Añadir texto…": None,
+    "Resaltar": None,
+    "Subrayar": None,
+    "Tachar": None,
     "Buscar…": "Ctrl+F",
     "Ir a página…": "Ctrl+G",
     # Ver
@@ -172,14 +175,15 @@ def test_anadir_texto_deshabilitado_sin_documento_o_firmado(
     ventana = MainWindow()
     try:
         acciones = _acciones_por_texto(ventana)
-        assert acciones["Añadir texto…"].isEnabled() is False  # type: ignore[attr-defined]
+        edicion = ("Añadir texto…", "Resaltar", "Subrayar", "Tachar")
+        assert not any(acciones[t].isEnabled() for t in edicion)  # type: ignore[attr-defined]
 
         doc = ventana.abrir_ruta(_pdf_min(tmp_path))
-        assert acciones["Añadir texto…"].isEnabled() is True  # type: ignore[attr-defined]
+        assert all(acciones[t].isEnabled() for t in edicion)  # type: ignore[attr-defined]
 
         # Documento firmado: la edición de contenido se deshabilita.
         ventana._registro.marcar(doc.id, Marca.FIRMADO)
         ventana._actualizar_acciones_documento()
-        assert acciones["Añadir texto…"].isEnabled() is False  # type: ignore[attr-defined]
+        assert not any(acciones[t].isEnabled() for t in edicion)  # type: ignore[attr-defined]
     finally:
         ventana._prefs.remove(mw._CLAVE_RECIENTES)

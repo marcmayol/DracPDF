@@ -22,6 +22,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QGraphicsRectItem
 
 from lectorpdf.core.domain.contenido import PalabraTexto
+from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.modelos import Documento
 from lectorpdf.core.use_cases.obtener_palabras import ObtenerPalabras
 from lectorpdf.ui.forms.coordenadas import rect_pdf_a_escena
@@ -83,6 +84,17 @@ class SeleccionLayer(QObject):
         if self._sel_inicio < 0 or self._sel_fin < 0:
             return ""
         return seleccion.texto_de(self._sel_palabras, self._sel_inicio, self._sel_fin)
+
+    def seleccion_actual(self) -> tuple[int, tuple[RectanguloPt, ...]] | None:
+        """Página (0-based) y rects en puntos PDF de las palabras seleccionadas,
+        o None si no hay selección (para marcar/corregir)."""
+        if self._sel_inicio < 0 or self._sel_fin < 0:
+            return None
+        lo, hi = sorted((self._sel_inicio, self._sel_fin))
+        rects = tuple(p.rect_pt for p in self._sel_palabras[lo : hi + 1])
+        if not rects:
+            return None
+        return self._sel_pagina, rects
 
     def copiar(self) -> str:
         """Copia el texto seleccionado al portapapeles y lo devuelve."""

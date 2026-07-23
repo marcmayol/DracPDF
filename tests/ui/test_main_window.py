@@ -806,6 +806,25 @@ def test_deshacer_desde_menu_revierte_texto_anadido(
         ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
+def test_marcar_seleccion_y_deshacer_desde_menu(
+    qapp: object, tmp_path: Path
+) -> None:
+    from lectorpdf.core.domain.anotaciones import TipoMarcado
+
+    ventana = MainWindow()
+    try:
+        doc = ventana.abrir_ruta(generar_pdf_contenido(tmp_path / "c.pdf"))
+        ventana._vista().capa_seleccion.seleccionar_todo(0)
+        ventana._marcar_seleccion(TipoMarcado.RESALTADO)
+        page = ventana._registro.obtener(doc.id)[0]
+        assert len(list(page.annots())) >= 1
+
+        ventana._deshacer()  # desde el handler del menú Edición
+        assert len(list(ventana._registro.obtener(doc.id)[0].annots())) == 0
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
+
+
 def test_estado_vacio_al_arrancar_y_paneles_ocultos(qapp: object) -> None:
     ventana = MainWindow()
     try:
