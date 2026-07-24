@@ -820,7 +820,7 @@ def test_deshacer_desde_menu_revierte_texto_anadido(
 
 
 def test_corregir_texto_desde_handler_elimina_original(
-    qapp: object, tmp_path: Path
+    qapp: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from lectorpdf.core.domain.anotaciones import FuenteTexto
     from lectorpdf.core.domain.formularios import RectanguloPt
@@ -830,6 +830,14 @@ def test_corregir_texto_desde_handler_elimina_original(
     d.new_page().insert_text((40, 90), "El total es MIL pesetas", fontsize=13)
     d.save(ruta)
     d.close()
+
+    # Si el sustituto no cabe al tamaño original, el handler pregunta si reducir:
+    # se responde "Sí" (evita el modal colgado en offscreen y prueba el reintento).
+    monkeypatch.setattr(
+        mw.QMessageBox,
+        "question",
+        lambda *a, **k: mw.QMessageBox.StandardButton.Yes,
+    )
 
     ventana = MainWindow()
     try:
