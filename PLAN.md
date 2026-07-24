@@ -199,6 +199,26 @@ Añadir contenido textual al PDF y corregir texto existente de forma acotada y h
 
 **Criterio de aceptación (definición de "hecho"):** añadir texto con fuentes embebidas, resaltar, subrayar, tachar y notas funcionan sobre el documento y sobreviven a guardar/reabrir; añadir y eliminar imágenes funcionan y sobreviven a reabrir; y la corrección de texto existente funciona dentro de sus límites declarados (una línea, sin invadir vecinos, texto original realmente eliminado) O BIEN se ha recortado con la aprobación explícita del titular mostrada en la conversación y el recorte está documentado en PLAN.md. Se muestra la salida de pytest con todos los tests en verde incluido el inventario de acciones ampliado (acciones nuevas con destino y condición, deshabilitadas con documento firmado, evidencia desde las acciones y deshacer demostrado desde el menú), la salida del script de verificación funcional (texto añadido persistente con fuente embebida; anotaciones estándar creadas y una eliminada; imagen añadida y otra eliminada verificadas tras reabrir; texto corregido con el original no extraíble y el caso "no cabe" ofreciendo alternativas) con exit 0, y git log con un commit por tarea.
 
+### Fase 10: Sistema de actualizaciones
+
+La app comprueba un manifiesto propio y se actualiza descargando el instalador de GitHub Releases. Decisión de arquitectura fija: la app instalada solo conoce la URL del manifiesto (updates.json), nunca la API de GitHub; toda la publicación se gobierna editando el manifiesto. Nace bajo las Reglas de aceptación de UI.
+
+1. Puerto `ActualizadorService` y caso de uso `ComprobarActualizacion`: descarga el manifiesto, compara versiones semánticamente (packaging.version, nunca comparación de strings; una versión del manifiesto menor o igual que la instalada = sin novedad, jamás "actualizar" hacia atrás) y devuelve el resultado como valor de dominio. Síncrono; la UI lo invoca con el worker existente
+2. Manifiesto `updates.json`: {version, url del setup, sha256, notas, check_horas}, con campos de extensión declarados pero no implementados (canal, porcentaje_despliegue). Hosting: propuesta en el diseño (GitHub Pages del propio repo como candidato simple); la petición usa ETag para que las comprobaciones sin novedad no descarguen cuerpo
+3. Frecuencia: comprobación al arrancar (retrasada unos segundos, en worker, sin competir con la restauración de sesión), cada `check_horas` si la app queda abierta (QTimer con jitter aleatorio de minutos), y manual en Ayuda → "Buscar actualizaciones…" (la única que también informa del resultado negativo "estás al día"). Ajuste "buscar actualizaciones automáticamente" activado por defecto
+4. Tolerancia a fallos absoluta: sin red, DNS caído, JSON malformado o servidor con error → silencio total; ningún error de arranque ni diálogo puede originarse en la comprobación automática (la manual sí informa del fallo). Test de cada caso
+5. Flujo de actualización: banda no modal "DracPDF X.Y.Z disponible" con notas y botón Actualizar → descarga a temporal → verificación SHA256 contra el manifiesto ANTES de ejecutar nada (hash incorrecto: se descarta y avisa, jamás se lanza) → si hay documentos con cambios sin guardar, se pide guardar primero → lanza el setup de Inno en modo silencioso por usuario y cierra la app; el instalador actualiza y reabre
+6. `scripts/publicar_release.py`: automatiza el ritual completo (build del exe, compilación del instalador, cálculo del hash, creación de la Release en GitHub con el asset, actualización y publicación del manifiesto), con modo `--dry-run` que lo prepara todo sin publicar. La versión sale de la fuente única existente
+7. Integración: acción de Ayuda, banda y ajuste en el inventario de acciones con sus condiciones
+
+#### Reglas propias de esta fase
+- La app instalada nunca consulta la API de GitHub: su única fuente es la URL del manifiesto
+- Comparación de versiones siempre semántica (`packaging.version`), jamás por strings; nunca se ofrece bajar de versión
+- Verificación del SHA256 del instalador descargado ANTES de ejecutar nada; hash incorrecto = se descarta y jamás se lanza
+- La comprobación automática es silenciosa ante cualquier fallo; solo la manual informa
+
+**Criterio de aceptación:** (funcional, sin red real: contra un servidor local o doble de pruebas) script/tests que demuestran: manifiesto con versión mayor → se reporta actualización con sus notas; igual o menor → sin novedad; JSON roto o servidor caído → la comprobación automática calla y la manual informa del error; descarga con hash incorrecto → se descarta sin ejecutarse; descarga con hash correcto → se invoca el lanzamiento del instalador (doblado en el test); y `publicar_release.py --dry-run` genera un manifiesto válido cuyo sha256 coincide con el instalador construido; todo con exit 0. (UI) inventario en verde con las acciones nuevas y sus condiciones. (E2E real) la propia release de esta fase se publica ejecutando `publicar_release.py`, y se muestra que una instalación de la versión anterior detecta y ofrece la nueva.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
