@@ -3,7 +3,12 @@
 ; Instalación por usuario (sin privilegios de administrador).
 
 #define MyAppName "DracPDF"
-#define MyAppVersion "0.2.1"
+; La versión la inyecta publicar_release.py por ISCC /DMyAppVersion=<__version__>
+; (fuente única: src/lectorpdf/__init__.py). Este valor por defecto solo sirve
+; para compilar a mano sin pasar el define.
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0-dev"
+#endif
 #define MyAppPublisher "Marc Mayol"
 #define MyAppContact "marcmayolorell@gmail.com"
 #define MyAppExeName "DracPDF.exe"

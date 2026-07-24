@@ -12,10 +12,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
 ISS = RAIZ / "scripts" / "dracpdf.iss"
+
+sys.path.insert(0, str(RAIZ / "src"))
+from lectorpdf import __version__  # noqa: E402  (fuente única de la versión)
 
 _CANDIDATOS_ISCC = [
     Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe",
@@ -43,8 +47,10 @@ def main() -> int:
             "Falta dist/DracPDF.exe. Ejecuta antes: uv run python scripts/construir_exe.py"
         )
     iscc = _buscar_iscc()
-    print("Compilando instalador con:", iscc)
-    return subprocess.call([iscc, str(ISS)], cwd=str(RAIZ))
+    print(f"Compilando instalador {__version__} con:", iscc)
+    return subprocess.call(
+        [iscc, f"/DMyAppVersion={__version__}", str(ISS)], cwd=str(RAIZ)
+    )
 
 
 if __name__ == "__main__":

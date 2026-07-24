@@ -1,6 +1,6 @@
 [project]
 name = "lectorpdf"
-version = "0.2.1"
+dynamic = ["version"]
 description = "DracPDF — visor de PDF con rellenado de formularios y firma digital"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -35,6 +35,11 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+# Fuente única de la versión: src/lectorpdf/__init__.py (__version__). El
+# instalador la recibe por ISCC /DMyAppVersion desde publicar_release.py.
+path = "src/lectorpdf/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lectorpdf"]
