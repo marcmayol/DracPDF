@@ -6,6 +6,7 @@ barra de herramientas.
 from __future__ import annotations
 
 import hashlib
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -43,6 +44,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTabWidget,
     QToolBar,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -59,6 +61,7 @@ from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
 from lectorpdf.adapters.red.actualizador_http import ActualizadorHTTP
 from lectorpdf.core.domain.actualizacion import (
+    Manifiesto,
     ResultadoComprobacion,
     TipoResultado,
 )
@@ -114,6 +117,7 @@ from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui import recientes
 from lectorpdf.ui.about_dialog import AboutDialog
+from lectorpdf.ui.actualizaciones.banda_actualizacion import BandaActualizacion
 from lectorpdf.ui.actualizaciones.controlador_actualizacion import (
     ControladorActualizacion,
 )
@@ -254,7 +258,8 @@ class MainWindow(QMainWindow):
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
         # Actualizaciones (Fase 10): controlador con su propio worker no modal.
-        self._comprobar_actu = ComprobarActualizacion(ActualizadorHTTP())
+        self._actualizador = ActualizadorHTTP()
+        self._comprobar_actu = ComprobarActualizacion(self._actualizador)
         self._ctrl_actu = ControladorActualizacion(
             self._comprobar_actu, __version__, self._prefs, self
         )
@@ -416,7 +421,18 @@ class MainWindow(QMainWindow):
         self._central.setObjectName("centralWidget")
         self._central.addWidget(self._estado_vacio)  # índice 0
         self._central.addWidget(self._pestanas)  # índice 1
-        return self._central
+
+        # Banda de actualización (Fase 10) por encima del área central, a nivel de
+        # ventana (visible sobre cualquier pestaña).
+        self._banda_actu = BandaActualizacion()
+        self._banda_actu.actualizar_solicitado.connect(self._ejecutar_actualizacion)
+        contenedor = QWidget()
+        disposicion = QVBoxLayout(contenedor)
+        disposicion.setContentsMargins(0, 0, 0, 0)
+        disposicion.setSpacing(0)
+        disposicion.addWidget(self._banda_actu)
+        disposicion.addWidget(self._central, 1)
+        return contenedor
 
     def _hay_documentos(self) -> bool:
         return any(v.documento is not None for v in self._vistas())
@@ -2025,9 +2041,46 @@ class MainWindow(QMainWindow):
             )
 
     def _al_actualizacion_disponible(self, manifiesto: object) -> None:
-        """Hay una versión nueva. La banda no modal se conecta en la tarea 5;
-        de momento se guarda el manifiesto disponible."""
-        self._manifiesto_disponible = manifiesto
+        """Hay una versión nueva: muestra la banda no modal."""
+        if isinstance(manifiesto, Manifiesto):
+            self._manifiesto_disponible = manifiesto
+            self._banda_actu.mostrar_para(manifiesto)
+
+    def _ejecutar_actualizacion(self, manifiesto: object) -> None:
+        """Descarga el instalador, verifica el SHA256 ANTES de ejecutar nada,
+        pide guardar los cambios pendientes y lanza el setup silencioso."""
+        if not isinstance(manifiesto, Manifiesto):
+            return
+        nombre = f"DracPDF-{manifiesto.version}-setup.exe"
+        destino = Path(tempfile.gettempdir()) / nombre
+        res = ejecutar_con_progreso(
+            self,
+            "Descargando la actualización…",
+            lambda _p: self._actualizador.descargar_instalador(manifiesto.url, destino),
+        )
+        if res.cancelado:
+            return
+        if res.error is not None:
+            QMessageBox.warning(
+                self, "Actualización", f"No se pudo descargar:\n{res.error}"
+            )
+            return
+        # Verificación de integridad ANTES de ejecutar nada.
+        if self._actualizador.sha256(destino).lower() != manifiesto.sha256.lower():
+            destino.unlink(missing_ok=True)
+            QMessageBox.warning(
+                self,
+                "Actualización",
+                "La descarga no coincide con la firma esperada (SHA256). Se ha "
+                "descartado y no se ejecutará nada.",
+            )
+            return
+        # Cambios sin guardar: se pide resolverlos antes de cerrar para actualizar.
+        for vista in self._vistas():
+            if not self._confirmar_cierre_documento(vista, activar=True):
+                return  # el usuario canceló: se aborta la actualización
+        self._actualizador.lanzar_instalador(destino)
+        self.close()
 
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
