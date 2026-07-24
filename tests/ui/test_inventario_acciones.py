@@ -72,6 +72,8 @@ _ESPERADAS: dict[str, str | None] = {
     "Firmar con certificado…": None,
     "Verificar firmas…": None,
     # Ayuda
+    "Buscar actualizaciones…": None,
+    "Buscar actualizaciones automáticamente": None,
     "Acerca de DracPDF": None,
 }
 
@@ -113,6 +115,25 @@ def test_todas_las_acciones_esperadas_existen_y_estan_conectadas(qapp: object) -
         if atajo is not None:
             real = accion.shortcut().toString()  # type: ignore[attr-defined]
             assert real == atajo, f"{texto!r}: atajo {real!r} != {atajo!r}"
+
+
+def test_acciones_de_actualizacion_y_banda(qapp: object) -> None:
+    from lectorpdf.ui import main_window as mw
+
+    ventana = MainWindow()
+    try:
+        acciones = _acciones_por_texto(ventana)
+        # "Buscar actualizaciones..." siempre disponible (no necesita documento).
+        assert acciones["Buscar actualizaciones…"].isEnabled()  # type: ignore[attr-defined]
+        # El ajuste es conmutable y refleja el estado del controlador (por
+        # defecto activado).
+        auto = acciones["Buscar actualizaciones automáticamente"]
+        assert auto.isCheckable()  # type: ignore[attr-defined]
+        assert auto.isChecked() == ventana._ctrl_actu.automatico_activado()
+        # La banda de actualización nace oculta (no modal, solo ante novedad).
+        assert ventana._banda_actu.isHidden()
+    finally:
+        ventana._prefs.remove(mw._CLAVE_RECIENTES)
 
 
 def test_presentacion_esta_deshabilitada(qapp: object) -> None:
