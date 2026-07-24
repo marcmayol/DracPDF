@@ -38,9 +38,11 @@ def test_vista_principal_arranca_con_el_tema(qapp: object, tema: tokens.Tema) ->
     ventana.resize(1000, 700)
     ventana.show()
 
-    # El área central es la pila (estado vacío + pestañas); el visor pertenece
-    # a la ventana. Sin documento se muestra el estado vacío.
-    assert ventana.centralWidget() is ventana._central
+    # El widget central envuelve la banda de actualización (oculta) sobre la pila
+    # (estado vacío + pestañas); el visor pertenece a la ventana. Sin documento se
+    # muestra el estado vacío.
+    assert ventana._central.parentWidget() is ventana.centralWidget()
+    assert ventana._banda_actu.parentWidget() is ventana.centralWidget()
     assert ventana._central.currentWidget() is ventana._estado_vacio
     assert ventana._visor.window() is ventana
     assert ventana._tema is tema
