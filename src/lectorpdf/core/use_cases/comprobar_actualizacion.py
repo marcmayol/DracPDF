@@ -30,7 +30,11 @@ class ComprobarActualizacion:
             if manifiesto is None:  # 304: ETag sin cambios
                 return ResultadoComprobacion(TipoResultado.SIN_CAMBIOS_ETAG, etag=etag)
             if Version(manifiesto.version) <= Version(version_actual):
-                return ResultadoComprobacion(TipoResultado.AL_DIA, etag=nuevo_etag)
+                # Se conserva el manifiesto (aunque no haya novedad) para que la
+                # UI conozca check_horas y programe la comprobación periódica.
+                return ResultadoComprobacion(
+                    TipoResultado.AL_DIA, manifiesto=manifiesto, etag=nuevo_etag
+                )
             return ResultadoComprobacion(
                 TipoResultado.HAY_ACTUALIZACION,
                 manifiesto=manifiesto,

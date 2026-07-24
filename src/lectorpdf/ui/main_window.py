@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from lectorpdf import __version__
 from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
 from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.contenido import PyMuPDFContenido
@@ -56,6 +57,11 @@ from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
+from lectorpdf.adapters.red.actualizador_http import ActualizadorHTTP
+from lectorpdf.core.domain.actualizacion import (
+    ResultadoComprobacion,
+    TipoResultado,
+)
 from lectorpdf.core.domain.anotaciones import (
     Color,
     Correccion,
@@ -80,6 +86,7 @@ from lectorpdf.core.use_cases.anadir_nota import AnadirNota
 from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
+from lectorpdf.core.use_cases.comprobar_actualizacion import ComprobarActualizacion
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
@@ -107,6 +114,9 @@ from lectorpdf.core.use_cases.unir_pdf import UnirPdf
 from lectorpdf.core.use_cases.verificar_firmas import VerificarFirmas
 from lectorpdf.ui import recientes
 from lectorpdf.ui.about_dialog import AboutDialog
+from lectorpdf.ui.actualizaciones.controlador_actualizacion import (
+    ControladorActualizacion,
+)
 from lectorpdf.ui.banda_firmado import BandaFirmado
 from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
@@ -243,6 +253,14 @@ class MainWindow(QMainWindow):
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
+        # Actualizaciones (Fase 10): controlador con su propio worker no modal.
+        self._comprobar_actu = ComprobarActualizacion(ActualizadorHTTP())
+        self._ctrl_actu = ControladorActualizacion(
+            self._comprobar_actu, __version__, self._prefs, self
+        )
+        self._ctrl_actu.actualizacion_disponible.connect(self._al_actualizacion_disponible)
+        self._ctrl_actu.comprobacion_terminada.connect(self._informar_comprobacion)
+        self._manifiesto_disponible: object | None = None
         self._acciones_icono: list[tuple[QAction, str]] = []
         self._sincronizando_doble = False  # evita recursión al sincronizar radios
         # Sincroniza la barra de título nativa (Windows) con el tema en cada
@@ -282,6 +300,9 @@ class MainWindow(QMainWindow):
         self.resize(1100, 1000)
         if restaurar_sesion:
             self._restaurar_sesion()
+            # Comprobación de actualizaciones al arrancar (retrasada, en worker):
+            # solo en arranque normal, no al abrir un fichero puntual ni en tests.
+            self._ctrl_actu.iniciar()
         self._actualizar_estado_central()
 
     def _aplicar_icono_ventana(self) -> None:
@@ -928,6 +949,17 @@ class MainWindow(QMainWindow):
 
     def _construir_menu_ayuda(self) -> None:
         menu = self.menuBar().addMenu("Ayuda")
+        self._accion_menu(
+            menu, "Buscar actualizaciones…", self._buscar_actualizaciones
+        )
+        self._accion_auto_actu = QAction(
+            "Buscar actualizaciones automáticamente", self
+        )
+        self._accion_auto_actu.setCheckable(True)
+        self._accion_auto_actu.setChecked(self._ctrl_actu.automatico_activado())
+        self._accion_auto_actu.toggled.connect(self._ctrl_actu.set_automatico)
+        menu.addAction(self._accion_auto_actu)
+        menu.addSeparator()
         self._accion_menu(menu, "Acerca de DracPDF", self._mostrar_acerca_de)
 
     def _construir_menu_archivo(self) -> None:
@@ -1965,6 +1997,37 @@ class MainWindow(QMainWindow):
 
     def _mostrar_acerca_de(self) -> None:
         AboutDialog(self._tema.es_oscuro, self).exec()
+
+    # -- Actualizaciones (Fase 10) ------------------------------------------
+
+    def _buscar_actualizaciones(self) -> None:
+        """Comprobación manual: informa también del resultado negativo."""
+        self._ctrl_actu.comprobar(manual=True)
+
+    def _informar_comprobacion(self, resultado: object) -> None:
+        """Solo la comprobación manual llega aquí: informa al usuario."""
+        if not isinstance(resultado, ResultadoComprobacion):
+            return
+        if resultado.tipo is TipoResultado.ERROR:
+            QMessageBox.warning(
+                self,
+                "Buscar actualizaciones",
+                "No se pudo comprobar si hay actualizaciones:\n"
+                f"{resultado.error or 'error desconocido'}",
+            )
+        elif resultado.hay_actualizacion and resultado.manifiesto is not None:
+            self._al_actualizacion_disponible(resultado.manifiesto)
+        else:
+            QMessageBox.information(
+                self,
+                "Buscar actualizaciones",
+                f"Estás al día: DracPDF {__version__} es la última versión.",
+            )
+
+    def _al_actualizacion_disponible(self, manifiesto: object) -> None:
+        """Hay una versión nueva. La banda no modal se conecta en la tarea 5;
+        de momento se guarda el manifiesto disponible."""
+        self._manifiesto_disponible = manifiesto
 
     def _actualizar_etiqueta(self, indice: int) -> None:
         documento = self._visor.documento
