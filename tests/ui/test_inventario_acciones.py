@@ -63,6 +63,8 @@ _ESPERADAS: dict[str, str | None] = {
     # Documento → Convertir a (salientes) y Archivo → Word a PDF (Fase 7).
     # Un único verbo para todas las salidas: "exportar" confundía a los usuarios.
     "Word (.docx)…": None,
+    "OpenDocument (.odt, reformateado)…": None,
+    "RTF (.rtf, reformateado)…": None,
     "Markdown (.md)…": None,
     "HTML (.html)…": None,
     "Texto plano (.txt)…": None,
@@ -189,6 +191,8 @@ def test_conversiones_salientes_deshabilitadas_sin_documento(
         acciones = _acciones_por_texto(ventana)
         salientes = (
             "Word (.docx)…",
+        "OpenDocument (.odt, reformateado)…",
+        "RTF (.rtf, reformateado)…",
             "Markdown (.md)…",
             "HTML (.html)…",
             "Texto plano (.txt)…",

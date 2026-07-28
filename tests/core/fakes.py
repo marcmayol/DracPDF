@@ -282,6 +282,8 @@ class FakeConversorPDF:
         self.word: list[tuple[str, Path, Rango | None]] = []
         self.html: list[tuple[str, Path, Rango | None, bool]] = []
         self.markdown: list[tuple[str, Path, Rango | None]] = []
+        self.odt: list[tuple[str, Path, Rango | None]] = []
+        self.rtf: list[tuple[str, Path, Rango | None]] = []
 
     def a_word(self, documento_id, destino, rango=None, progreso=None):  # type: ignore[no-untyped-def]
         if progreso is not None:
@@ -297,6 +299,16 @@ class FakeConversorPDF:
         if progreso is not None:
             progreso(1, 1)
         self.markdown.append((documento_id, destino, rango))
+
+    def a_odt(self, documento_id, destino, rango=None, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.odt.append((documento_id, destino, rango))
+
+    def a_rtf(self, documento_id, destino, rango=None, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(1, 1)
+        self.rtf.append((documento_id, destino, rango))
 
     def es_escaneado(self, documento_id: str) -> bool:
         return self._escaneado

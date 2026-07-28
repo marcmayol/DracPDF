@@ -12,13 +12,14 @@ import base64
 import os
 import re
 import tempfile
-from collections import Counter
 from pathlib import Path
-from typing import Any
 
 import fitz
 
+from lectorpdf.adapters.pymupdf.estructura import Bloque, bloques_de, tamano_base
+from lectorpdf.adapters.pymupdf.odt_salida import escribir_odt
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.pymupdf.rtf_salida import escribir_rtf
 from lectorpdf.core.domain.herramientas import Progreso, Rango
 
 _RE_IMAGEN = re.compile(r'src="data:image/([^;]+);base64,([^"]+)"')
@@ -86,16 +87,52 @@ class ConversorFitz:
     ) -> None:
         doc = self._registro.obtener(documento_id)
         indices = self._indices(doc, rango)
-        tam_base = _tamano_base(doc, indices)
+        base = tamano_base(doc, indices)
         partes: list[str] = []
         total = len(indices)
         for i, idx in enumerate(indices):
-            pagina_md = _pagina_a_markdown(doc[idx], tam_base)
+            pagina_md = _bloques_a_markdown(bloques_de(doc[idx], base))
             if pagina_md.strip():
                 partes.append(pagina_md)
             if progreso is not None:
                 progreso(i + 1, total)
         _escribir_texto_atomico(destino, "\n\n".join(partes) + "\n")
+
+    def a_odt(
+        self,
+        documento_id: str,
+        destino: Path,
+        rango: Rango | None = None,
+        progreso: Progreso | None = None,
+    ) -> None:
+        escribir_odt(self._estructura(documento_id, rango, progreso), destino)
+
+    def a_rtf(
+        self,
+        documento_id: str,
+        destino: Path,
+        rango: Rango | None = None,
+        progreso: Progreso | None = None,
+    ) -> None:
+        escribir_rtf(self._estructura(documento_id, rango, progreso), destino)
+
+    def _estructura(
+        self,
+        documento_id: str,
+        rango: Rango | None,
+        progreso: Progreso | None,
+    ) -> list[Bloque]:
+        """Bloques de todas las páginas del rango, en orden de lectura."""
+        doc = self._registro.obtener(documento_id)
+        indices = self._indices(doc, rango)
+        base = tamano_base(doc, indices)
+        bloques: list[Bloque] = []
+        total = len(indices)
+        for i, idx in enumerate(indices):
+            bloques.extend(bloques_de(doc[idx], base))
+            if progreso is not None:
+                progreso(i + 1, total)
+        return bloques
 
     def es_escaneado(self, documento_id: str) -> bool:
         """True si ninguna página tiene texto extraíble (PDF escaneado): la
@@ -140,73 +177,20 @@ def _escribir_texto_atomico(destino: Path, texto: str) -> None:
     os.replace(tmp, destino)
 
 
-def _tamano_base(doc: fitz.Document, indices: list[int]) -> float:
-    """Tamaño de fuente del cuerpo = el más frecuente (ponderado por longitud de
-    texto), para comparar con él los títulos."""
-    conteo: Counter[float] = Counter()
-    for idx in indices:
-        for bloque in doc[idx].get_text("dict")["blocks"]:
-            if bloque.get("type") != 0:
-                continue
-            for linea in bloque["lines"]:
-                for span in linea["spans"]:
-                    conteo[round(span["size"], 1)] += len(span["text"])
-    return conteo.most_common(1)[0][0] if conteo else 11.0
-
-
-def _pagina_a_markdown(page: fitz.Page, tam_base: float) -> str:
-    items: list[tuple[float, str]] = []
-    rects_tabla: list[fitz.Rect] = []
-    for tabla in page.find_tables().tables:
-        rect = fitz.Rect(tabla.bbox)
-        rects_tabla.append(rect)
-        items.append((rect.y0, _tabla_markdown(tabla.extract())))
-
-    for bloque in page.get_text("dict")["blocks"]:
-        if bloque.get("type") != 0:  # solo bloques de texto
-            continue
-        rect_b = fitz.Rect(bloque["bbox"])
-        if any(rect_b.intersects(rt) for rt in rects_tabla):
-            continue  # su texto ya está en la tabla
-        md = _bloque_markdown(bloque, tam_base)
-        if md:
-            items.append((rect_b.y0, md))
-
-    items.sort(key=lambda it: it[0])  # orden de lectura (vertical)
-    return "\n\n".join(md for _, md in items if md)
-
-
-def _bloque_markdown(bloque: dict[str, Any], tam_base: float) -> str:
-    lineas: list[str] = []
-    tam_max = 0.0
-    for linea in bloque["lines"]:
-        partes: list[str] = []
-        for span in linea["spans"]:
-            texto = span["text"]
-            tam_max = max(tam_max, span["size"])
-            if span["flags"] & _NEGRITA and texto.strip():
-                partes.append(f"**{texto}**")
-            else:
+def _bloques_a_markdown(bloques: list[Bloque]) -> str:
+    partes: list[str] = []
+    for bloque in bloques:
+        if bloque.es_tabla:
+            partes.append(_tabla_markdown([list(f) for f in bloque.filas]))
+        elif bloque.es_titulo:
+            partes.append("#" * bloque.nivel + " " + bloque.texto.strip())
+        else:
+            texto = "".join(
+                f"**{t.texto}**" if t.negrita else t.texto for t in bloque.tramos
+            ).strip()
+            if texto:
                 partes.append(texto)
-        lineas.append("".join(partes))
-    texto = " ".join(t.strip() for t in lineas if t.strip()).strip()
-    if not texto:
-        return ""
-    nivel = _nivel_titulo(tam_max, tam_base)
-    if nivel:  # un título ya destaca por tamaño; no dupliques con negrita
-        return "#" * nivel + " " + texto.replace("**", "")
-    return texto
-
-
-def _nivel_titulo(tam_max: float, tam_base: float) -> int:
-    ratio = tam_max / tam_base if tam_base else 1.0
-    if ratio >= 1.8:
-        return 1
-    if ratio >= 1.45:
-        return 2
-    if ratio >= 1.25:
-        return 3
-    return 0
+    return "\n\n".join(p for p in partes if p)
 
 
 def _tabla_markdown(filas: list[list[str | None]]) -> str:

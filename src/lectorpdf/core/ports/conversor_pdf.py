@@ -33,6 +33,22 @@ class ConversorPDF(Protocol):
         progreso: Progreso | None = None,
     ) -> None: ...
 
+    def a_odt(
+        self,
+        documento_id: str,
+        destino: Path,
+        rango: Rango | None = None,
+        progreso: Progreso | None = None,
+    ) -> None: ...
+
+    def a_rtf(
+        self,
+        documento_id: str,
+        destino: Path,
+        rango: Rango | None = None,
+        progreso: Progreso | None = None,
+    ) -> None: ...
+
     def a_markdown(
         self,
         documento_id: str,

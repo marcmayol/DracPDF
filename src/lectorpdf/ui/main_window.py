@@ -971,6 +971,12 @@ class MainWindow(QMainWindow):
         self._accion_convertir_word = self._accion_menu(
             submenu, "Word (.docx)…", self._convertir_a_word
         )
+        self._accion_convertir_odt = self._accion_menu(
+            submenu, "OpenDocument (.odt, reformateado)…", self._convertir_a_odt
+        )
+        self._accion_convertir_rtf = self._accion_menu(
+            submenu, "RTF (.rtf, reformateado)…", self._convertir_a_rtf
+        )
         self._accion_convertir_md = self._accion_menu(
             submenu, "Markdown (.md)…", self._convertir_a_markdown
         )
@@ -1947,6 +1953,8 @@ class MainWindow(QMainWindow):
         hay = self._documento is not None
         for accion in (
             self._accion_convertir_word,
+            self._accion_convertir_odt,
+            self._accion_convertir_rtf,
             self._accion_convertir_html,
             self._accion_convertir_md,
             self._accion_convertir_texto,
@@ -2004,6 +2012,24 @@ class MainWindow(QMainWindow):
             "Markdown (*.md)",
             con_imagenes=False,
             operacion=lambda conv, doc_id, dst, r, _i, p: conv.a_markdown(doc_id, dst, r, p),
+        )
+
+    def _convertir_a_odt(self) -> None:
+        self._convertir_saliente(
+            "Convertir a OpenDocument",
+            "odt",
+            "OpenDocument (*.odt)",
+            con_imagenes=False,
+            operacion=lambda conv, doc_id, dst, r, _i, p: conv.a_odt(doc_id, dst, r, p),
+        )
+
+    def _convertir_a_rtf(self) -> None:
+        self._convertir_saliente(
+            "Convertir a RTF",
+            "rtf",
+            "Texto enriquecido (*.rtf)",
+            con_imagenes=False,
+            operacion=lambda conv, doc_id, dst, r, _i, p: conv.a_rtf(doc_id, dst, r, p),
         )
 
     def _convertir_saliente(

@@ -12,6 +12,7 @@ from lectorpdf.core.domain.herramientas import Rango
 from lectorpdf.core.domain.modelos import Documento, Pagina
 from lectorpdf.core.use_cases.convertir_a_html import ConvertirAHtml
 from lectorpdf.core.use_cases.convertir_a_markdown import ConvertirAMarkdown
+from lectorpdf.core.use_cases.convertir_a_ofimatica import ConvertirAOdt, ConvertirARtf
 from lectorpdf.core.use_cases.convertir_a_word import ConvertirAWord
 from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
 from lectorpdf.core.use_cases.convertir_texto_a_pdf import ConvertirTextoAPdf
@@ -56,6 +57,18 @@ def test_convertir_a_markdown_delega(tmp_path: Path) -> None:
     ConvertirAMarkdown(conversor).ejecutar(_documento(), destino)
 
     assert conversor.markdown == [("doc-1", destino, None)]
+
+
+def test_convertir_a_odt_y_rtf_delegan(tmp_path: Path) -> None:
+    conversor = FakeConversorPDF()
+    odt = tmp_path / "s.odt"
+    rtf = tmp_path / "s.rtf"
+
+    ConvertirAOdt(conversor).ejecutar(_documento(), odt, Rango(1, 3))
+    ConvertirARtf(conversor).ejecutar(_documento(), rtf)
+
+    assert conversor.odt == [("doc-1", odt, Rango(1, 3))]
+    assert conversor.rtf == [("doc-1", rtf, None)]
 
 
 def test_es_pdf_escaneado_delega() -> None:

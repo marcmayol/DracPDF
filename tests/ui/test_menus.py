@@ -57,6 +57,8 @@ def test_convertir_a_agrupa_todas_las_salidas(qapp: object) -> None:
     formatos = _textos_de_menu(ventana, "Convertir a")
     assert formatos == [
         "Word (.docx)…",
+        "OpenDocument (.odt, reformateado)…",
+        "RTF (.rtf, reformateado)…",
         "Markdown (.md)…",
         "HTML (.html)…",
         "Texto plano (.txt)…",
