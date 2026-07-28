@@ -42,9 +42,26 @@ def test_barra_de_menus_del_diseno(qapp: object) -> None:
 def test_documento_agrupa_las_operaciones_de_pdf(qapp: object) -> None:
     ventana = MainWindow()
     textos = _textos_de_menu(ventana, "Documento")
-    for esperado in ("Unir PDF…", "Dividir PDF…", "Comprimir…", "Exportar a PNG…"):
+    for esperado in ("Unir PDF…", "Dividir PDF…", "Comprimir…", "Convertir a"):
         assert esperado in textos
     assert "Propiedades del documento…" in textos  # movido aquí desde Archivo
+
+
+def test_convertir_a_agrupa_todas_las_salidas(qapp: object) -> None:
+    """Un solo verbo para las salidas: los usuarios leían "Exportar a texto" como
+    algo distinto de "Convertir a Word"."""
+    ventana = MainWindow()
+    textos = _textos_de_menu(ventana, "Documento")
+    for antiguo in ("Exportar a PNG…", "Exportar a texto…", "Convertir"):
+        assert antiguo not in textos
+    formatos = _textos_de_menu(ventana, "Convertir a")
+    assert formatos == [
+        "Word (.docx)…",
+        "Markdown (.md)…",
+        "HTML (.html)…",
+        "Texto plano (.txt)…",
+        "Imágenes PNG…",
+    ]
 
 
 def test_edicion_y_ver_tienen_las_acciones_clave(qapp: object) -> None:

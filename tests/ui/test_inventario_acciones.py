@@ -59,13 +59,14 @@ _ESPERADAS: dict[str, str | None] = {
     "Proteger con contraseña…": None,
     "Quitar contraseña…": None,
     "Comprimir…": None,
-    "Exportar a PNG…": None,
-    "Exportar a texto…": None,
     "Propiedades del documento…": None,
-    # Documento → Convertir (salientes) y Archivo → Word a PDF (Fase 7)
-    "A Word…": None,
-    "A HTML…": None,
-    "A Markdown…": None,
+    # Documento → Convertir a (salientes) y Archivo → Word a PDF (Fase 7).
+    # Un único verbo para todas las salidas: "exportar" confundía a los usuarios.
+    "Word (.docx)…": None,
+    "Markdown (.md)…": None,
+    "HTML (.html)…": None,
+    "Texto plano (.txt)…": None,
+    "Imágenes PNG…": None,
     "Convertir Word a PDF (reformateado)…": None,
     # Firmas
     "Firmar (dibujar y estampar)…": None,
@@ -178,7 +179,13 @@ def test_conversiones_salientes_deshabilitadas_sin_documento(
     ventana = MainWindow()
     try:
         acciones = _acciones_por_texto(ventana)
-        salientes = ("A Word…", "A HTML…", "A Markdown…")
+        salientes = (
+            "Word (.docx)…",
+            "Markdown (.md)…",
+            "HTML (.html)…",
+            "Texto plano (.txt)…",
+            "Imágenes PNG…",
+        )
         # Sin documento: las salientes deshabilitadas; Word→PDF (externo) habilitada.
         assert all(not acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]
         assert acciones["Convertir Word a PDF (reformateado)…"].isEnabled()  # type: ignore[attr-defined]

@@ -941,17 +941,24 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         self._accion_menu(menu, "Comprimir…", self._menu_comprimir)
         menu.addSeparator()
-        self._accion_menu(menu, "Exportar a PNG…", self._menu_exportar_png)
-        self._accion_menu(menu, "Exportar a texto…", self._menu_exportar_texto)
-        submenu = menu.addMenu("Convertir")
+        # Todas las salidas del documento viven bajo el mismo verbo: los usuarios
+        # tomaban "Exportar a texto" por algo distinto de "Convertir a Word".
+        submenu = menu.addMenu("Convertir a")
         self._accion_convertir_word = self._accion_menu(
-            submenu, "A Word…", self._convertir_a_word
-        )
-        self._accion_convertir_html = self._accion_menu(
-            submenu, "A HTML…", self._convertir_a_html
+            submenu, "Word (.docx)…", self._convertir_a_word
         )
         self._accion_convertir_md = self._accion_menu(
-            submenu, "A Markdown…", self._convertir_a_markdown
+            submenu, "Markdown (.md)…", self._convertir_a_markdown
+        )
+        self._accion_convertir_html = self._accion_menu(
+            submenu, "HTML (.html)…", self._convertir_a_html
+        )
+        self._accion_convertir_texto = self._accion_menu(
+            submenu, "Texto plano (.txt)…", self._convertir_a_texto
+        )
+        submenu.addSeparator()
+        self._accion_convertir_png = self._accion_menu(
+            submenu, "Imágenes PNG…", self._convertir_a_png
         )
         menu.addSeparator()
         self._accion_menu(menu, "Propiedades del documento…", self._mostrar_propiedades)
@@ -1794,12 +1801,12 @@ class MainWindow(QMainWindow):
                 f"({r.porcentaje_reduccion:.1f}% menos)\n{destino}",
             )
 
-    def _menu_exportar_png(self) -> None:
-        doc = self._documento_o_aviso("Exportar a PNG")
+    def _convertir_a_png(self) -> None:
+        doc = self._documento_o_aviso("Convertir a imágenes PNG")
         if doc is None:
             return
         dpi, ok = QInputDialog.getInt(
-            self, "Exportar a PNG", "Resolución (DPI):", DPI_POR_DEFECTO, 30, 600
+            self, "Convertir a imágenes PNG", "Resolución (DPI):", DPI_POR_DEFECTO, 30, 600
         )
         if not ok:
             return
@@ -1809,7 +1816,7 @@ class MainWindow(QMainWindow):
         salida = Path(directorio)
         res = ejecutar_con_progreso(
             self,
-            "Exportando a PNG…",
+            "Convirtiendo a PNG…",
             lambda p: self._exportar_png.ejecutar(doc, salida, dpi, p),
         )
         if res.cancelado or res.error is not None:
@@ -1817,23 +1824,25 @@ class MainWindow(QMainWindow):
             return
         rutas = res.resultado if isinstance(res.resultado, list) else []
         QMessageBox.information(
-            self, "Hecho", f"Exportadas {len(rutas)} imágenes en:\n{salida}"
+            self, "Hecho", f"Convertidas {len(rutas)} páginas a imágenes en:\n{salida}"
         )
 
-    def _menu_exportar_texto(self) -> None:
-        doc = self._documento_o_aviso("Exportar a texto")
+    def _convertir_a_texto(self) -> None:
+        doc = self._documento_o_aviso("Convertir a texto plano")
         if doc is None:
             return
         destino_str, _ = QFileDialog.getSaveFileName(
-            self, "Guardar texto", "texto.txt", "Texto (*.txt)"
+            self, "Guardar texto plano", "texto.txt", "Texto (*.txt)"
         )
         if not destino_str:
             return
         destino = Path(destino_str)
         res = ejecutar_con_progreso(
-            self, "Exportando texto…", lambda p: self._exportar_texto.ejecutar(doc, destino)
+            self,
+            "Convirtiendo a texto plano…",
+            lambda p: self._exportar_texto.ejecutar(doc, destino),
         )
-        self._tras_tarea(res, f"Texto exportado a:\n{destino}")
+        self._tras_tarea(res, f"Texto plano guardado en:\n{destino}")
 
     # -- Conversiones de formato (Fase 7) -----------------------------------
 
@@ -1844,6 +1853,8 @@ class MainWindow(QMainWindow):
             self._accion_convertir_word,
             self._accion_convertir_html,
             self._accion_convertir_md,
+            self._accion_convertir_texto,
+            self._accion_convertir_png,
         ):
             accion.setEnabled(hay)
         self._accion_form.setEnabled(hay and self._capa_form.tiene_campos())
