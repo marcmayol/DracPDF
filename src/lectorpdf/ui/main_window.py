@@ -76,7 +76,7 @@ from lectorpdf.core.domain.anotaciones import (
     TipoMarcado,
 )
 from lectorpdf.core.domain.contenido import Coincidencia
-from lectorpdf.core.domain.conversion import EXTENSIONES_IMAGEN
+from lectorpdf.core.domain.conversion import EXTENSIONES_IMAGEN, FORMATOS_SIN_SOPORTE
 from lectorpdf.core.domain.errores import (
     ErrorDominio,
     FormularioXFANoSoportado,
@@ -1012,6 +1012,16 @@ class MainWindow(QMainWindow):
         entrantes = menu.addMenu("Convertir a PDF")
         self._accion_menu(
             entrantes, "Desde Word (reformateado)…", self._convertir_word_a_pdf
+        )
+        self._accion_menu(
+            entrantes,
+            "Desde OpenDocument (.odt, reformateado)…",
+            lambda: self._convertir_texto_a_pdf("odt"),
+        )
+        self._accion_menu(
+            entrantes,
+            "Desde RTF (.rtf, reformateado)…",
+            lambda: self._convertir_texto_a_pdf("rtf"),
         )
         self._accion_menu(
             entrantes, "Desde Markdown (.md)…", lambda: self._convertir_texto_a_pdf("md")
@@ -1980,11 +1990,18 @@ class MainWindow(QMainWindow):
 
     def _convertir_word_a_pdf(self) -> None:
         ruta_str, _ = QFileDialog.getOpenFileName(
-            self, "Elegir documento Word", "", "Documento Word (*.docx)"
+            self,
+            "Elegir documento Word",
+            "",
+            "Documento Word (*.docx);;Formatos no compatibles (*.doc *.pages *.wpd)",
         )
         if not ruta_str:
             return
         ruta = Path(ruta_str)
+        aviso = FORMATOS_SIN_SOPORTE.get(ruta.suffix.lower())
+        if aviso is not None:
+            QMessageBox.information(self, "Formato no compatible", aviso)
+            return
         dialogo = ConversionWordDialog(self)
         if dialogo.exec() != QDialog.DialogCode.Accepted:
             return
@@ -2019,6 +2036,8 @@ class MainWindow(QMainWindow):
 
     #: Filtro de fichero y título por formato de entrada de texto.
     _ENTRADAS_TEXTO: dict[str, tuple[str, str]] = {
+        "odt": ("Elegir documento OpenDocument", "OpenDocument (*.odt)"),
+        "rtf": ("Elegir documento RTF", "Texto enriquecido (*.rtf)"),
         "md": ("Elegir Markdown", "Markdown (*.md *.markdown)"),
         "html": ("Elegir página HTML", "Página web (*.html *.htm)"),
         "txt": ("Elegir texto plano", "Texto (*.txt)"),
@@ -2026,10 +2045,17 @@ class MainWindow(QMainWindow):
 
     def _convertir_texto_a_pdf(self, formato: str) -> None:
         titulo, filtro = self._ENTRADAS_TEXTO[formato]
-        ruta_str, _ = QFileDialog.getOpenFileName(self, titulo, "", filtro)
+        # Los formatos sin soporte se ofrecen en el filtro a propósito: si no
+        # apareciesen, el usuario vería su carpeta "vacía" sin saber por qué.
+        filtro_completo = f"{filtro};;Formatos no compatibles (*.doc *.pages *.wpd)"
+        ruta_str, _ = QFileDialog.getOpenFileName(self, titulo, "", filtro_completo)
         if not ruta_str:
             return
         ruta = Path(ruta_str)
+        aviso = FORMATOS_SIN_SOPORTE.get(ruta.suffix.lower())
+        if aviso is not None:
+            QMessageBox.information(self, "Formato no compatible", aviso)
+            return
         dialogo = ConversionWordDialog(self)  # mismo tamaño de página y margen
         dialogo.setWindowTitle(f"{titulo.replace('Elegir', 'Convertir')} a PDF")
         if dialogo.exec() != QDialog.DialogCode.Accepted:

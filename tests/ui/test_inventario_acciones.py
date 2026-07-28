@@ -69,6 +69,8 @@ _ESPERADAS: dict[str, str | None] = {
     "Imágenes PNG…": None,
     # Archivo → Convertir a PDF (entrantes)
     "Desde Word (reformateado)…": None,
+    "Desde OpenDocument (.odt, reformateado)…": None,
+    "Desde RTF (.rtf, reformateado)…": None,
     "Desde Markdown (.md)…": None,
     "Desde HTML…": None,
     "Desde texto plano (.txt)…": None,

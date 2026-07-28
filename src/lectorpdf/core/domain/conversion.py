@@ -38,14 +38,35 @@ class AjusteImagen(Enum):
     PAGINA_FIJA = auto()
 
 
-#: Extensiones de texto que se convierten a PDF por la cadena Qt.
+#: Extensiones que se convierten a PDF por la cadena Qt (texto y ODT).
 EXTENSIONES_TEXTO: tuple[str, ...] = (
     ".md",
     ".markdown",
     ".html",
     ".htm",
     ".txt",
+    ".odt",
+    ".rtf",
 )
+
+#: Formatos de texto que NO se convierten, con la salida que se le ofrece al
+#: usuario. Leerlos exigiría Word o LibreOffice instalados, y DracPDF es un
+#: ejecutable autocontenido; callar y no mostrar el fichero sería peor.
+FORMATOS_SIN_SOPORTE: dict[str, str] = {
+    ".doc": (
+        "Los documentos de Word 97-2003 (.doc) no se pueden convertir aquí.\n\n"
+        "Ábrelo en Word y guárdalo como .docx, o expórtalo a PDF desde el propio "
+        "Word."
+    ),
+    ".pages": (
+        "Los documentos de Pages (.pages) no se pueden convertir aquí.\n\n"
+        "Expórtalo desde Pages a Word (.docx) o a PDF."
+    ),
+    ".wpd": (
+        "Los documentos de WordPerfect (.wpd) no se pueden convertir aquí.\n\n"
+        "Ábrelo en su programa original y guárdalo como .docx o .rtf."
+    ),
+}
 
 #: Extensiones de imagen que el motor sabe abrir (las de MuPDF).
 EXTENSIONES_IMAGEN: tuple[str, ...] = (

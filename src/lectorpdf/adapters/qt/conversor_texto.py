@@ -16,11 +16,16 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QTextDocument
 
 from lectorpdf.adapters.qt.escritura_pdf import escribir_pdf
+from lectorpdf.adapters.qt.odt import odt_a_html
+from lectorpdf.adapters.qt.rtf import rtf_a_html
 from lectorpdf.core.domain.conversion import ConfigPagina
+from lectorpdf.core.domain.errores import ErrorDominio
 from lectorpdf.core.domain.herramientas import Progreso
 
 _MARKDOWN = (".md", ".markdown")
 _HTML = (".html", ".htm")
+_ODT = ".odt"
+_RTF = ".rtf"
 
 
 def leer_texto(ruta: Path) -> str:
@@ -47,16 +52,22 @@ class ConversorTextoQt:
         config: ConfigPagina,
         progreso: Progreso | None = None,
     ) -> None:
-        texto = leer_texto(ruta)
         documento = QTextDocument()
         sufijo = ruta.suffix.lower()
-        if sufijo in _MARKDOWN:
-            documento.setMarkdown(texto)
+        if sufijo in (_ODT, _RTF):
+            # El ODT trae sus imágenes dentro del paquete, ya como data: URI.
+            traducir = odt_a_html if sufijo == _ODT else rtf_a_html
+            try:
+                documento.setHtml(traducir(ruta))
+            except ValueError as exc:
+                raise ErrorDominio(str(exc)) from exc
+        elif sufijo in _MARKDOWN:
+            documento.setMarkdown(leer_texto(ruta))
         elif sufijo in _HTML:
             documento.setBaseUrl(QUrl.fromLocalFile(str(ruta.parent) + "/"))
-            documento.setHtml(texto)
+            documento.setHtml(leer_texto(ruta))
         else:
-            documento.setPlainText(texto)
+            documento.setPlainText(leer_texto(ruta))
         escribir_pdf(documento, destino, config)
         if progreso is not None:
             progreso(1, 1)  # conversión en un paso

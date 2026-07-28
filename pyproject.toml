@@ -79,6 +79,8 @@ module = [
     "mammoth",
     "docx",
     "docx.*",
+    "lxml",
+    "lxml.*",
 ]
 ignore_missing_imports = true
 # pyHanko trae tipos parciales; lo tratamos como no tipado para no arrastrar sus

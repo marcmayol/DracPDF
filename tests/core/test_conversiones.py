@@ -120,7 +120,9 @@ def test_imagenes_a_pdf_rechaza_formato_no_admitido(tmp_path: Path) -> None:
     assert conversor.conversiones == []  # ni una sola imagen se convierte
 
 
-@pytest.mark.parametrize("nombre", ["notas.md", "pagina.HTML", "leeme.txt"])
+@pytest.mark.parametrize(
+    "nombre", ["notas.md", "pagina.HTML", "leeme.txt", "informe.odt"]
+)
 def test_texto_a_pdf_admite_markdown_html_y_txt(tmp_path: Path, nombre: str) -> None:
     conversor = FakeConversorTexto()
     origen = tmp_path / nombre

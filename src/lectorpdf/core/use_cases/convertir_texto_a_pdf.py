@@ -1,4 +1,4 @@
-"""Caso de uso: convertir Markdown, HTML o texto plano externo a PDF."""
+"""Caso de uso: convertir Markdown, HTML, texto plano u ODT externo a PDF."""
 
 from __future__ import annotations
 
@@ -25,6 +25,6 @@ class ConvertirTextoAPdf:
             raise DocumentoNoEncontrado(f"No existe el fichero: {ruta}")
         if ruta.suffix.lower() not in EXTENSIONES_TEXTO:
             raise ErrorDominio(
-                f"No es Markdown, HTML ni texto plano: {ruta.name}"
+                f"No es Markdown, HTML, texto plano ni ODT: {ruta.name}"
             )
         self._conversor.a_pdf(ruta, destino, config or ConfigPagina(), progreso)
