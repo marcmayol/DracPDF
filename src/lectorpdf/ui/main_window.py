@@ -59,6 +59,7 @@ from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.pymupdf.tablas import PyMuPDFTablas
 from lectorpdf.adapters.qt.conversor_texto import ConversorTextoQt
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
 from lectorpdf.adapters.red.actualizador_http import ActualizadorHTTP
@@ -86,6 +87,11 @@ from lectorpdf.core.domain.firma_digital import ConfigFirma
 from lectorpdf.core.domain.formularios import RectanguloPt
 from lectorpdf.core.domain.herramientas import ResultadoCompresion
 from lectorpdf.core.domain.modelos import Documento
+from lectorpdf.core.domain.tablas import (
+    EstrategiaTablas,
+    FormatoTabla,
+    TablaDetectada,
+)
 from lectorpdf.core.use_cases.abrir_documento import AbrirDocumento
 from lectorpdf.core.use_cases.anadir_imagen import AnadirImagen
 from lectorpdf.core.use_cases.anadir_nota import AnadirNota
@@ -94,6 +100,7 @@ from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.comprobar_actualizacion import ComprobarActualizacion
 from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
+from lectorpdf.core.use_cases.convertir_tablas import ConvertirTablas, DetectarTablas
 from lectorpdf.core.use_cases.convertir_texto_a_pdf import ConvertirTextoAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
@@ -103,7 +110,7 @@ from lectorpdf.core.use_cases.eliminar_anotacion import EliminarAnotacion
 from lectorpdf.core.use_cases.eliminar_imagen import EliminarImagen
 from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
-from lectorpdf.core.use_cases.exportar_imagenes import DPI_POR_DEFECTO, ExportarImagenes
+from lectorpdf.core.use_cases.exportar_imagenes import ExportarImagenes
 from lectorpdf.core.use_cases.exportar_texto import ExportarTexto
 from lectorpdf.core.use_cases.firmar_digitalmente import FirmarDigitalmente
 from lectorpdf.core.use_cases.guardar_formulario import GuardarFormulario
@@ -132,7 +139,11 @@ from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.controles.control_pagina import ControlPagina
 from lectorpdf.ui.controles.control_zoom import ControlZoom
 from lectorpdf.ui.conversion.imagenes_dialog import ConversionImagenesDialog
+from lectorpdf.ui.conversion.imagenes_salida_dialog import (
+    ConversionImagenesSalidaDialog,
+)
 from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
+from lectorpdf.ui.conversion.tablas_dialog import ConversionTablasDialog
 from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
 from lectorpdf.ui.estado_vacio import EstadoVacio
@@ -226,6 +237,7 @@ class MainWindow(QMainWindow):
         self._servicio_herr = PyMuPDFHerramientas(self._registro)
         self._servicio_contenido = PyMuPDFContenido(self._registro)
         self._servicio_anotaciones = PyMuPDFAnotaciones(self._registro)
+        self._servicio_tablas = PyMuPDFTablas(self._registro)
         self._conversor = ConversorFitz(self._registro)
         self._conversor_word = ConversorWordQt()
         self._conversor_imagenes = ConversorImagenesFitz()
@@ -264,6 +276,8 @@ class MainWindow(QMainWindow):
         self._word_a_pdf = ConvertirWordAPdf(self._conversor_word)
         self._imagenes_a_pdf = ConvertirImagenesAPdf(self._conversor_imagenes)
         self._texto_a_pdf = ConvertirTextoAPdf(self._conversor_texto)
+        self._detectar_tablas = DetectarTablas(self._servicio_tablas)
+        self._convertir_tablas_caso = ConvertirTablas(self._servicio_tablas)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
@@ -967,8 +981,12 @@ class MainWindow(QMainWindow):
             submenu, "Texto plano (.txt)…", self._convertir_a_texto
         )
         submenu.addSeparator()
+        self._accion_convertir_tablas = self._accion_menu(
+            submenu, "Tablas (CSV, Excel)…", self._convertir_tablas
+        )
+        submenu.addSeparator()
         self._accion_convertir_png = self._accion_menu(
-            submenu, "Imágenes PNG…", self._convertir_a_png
+            submenu, "Imágenes (PNG, JPEG, WEBP, TIFF, SVG)…", self._convertir_a_imagenes
         )
         menu.addSeparator()
         self._accion_menu(menu, "Propiedades del documento…", self._mostrar_propiedades)
@@ -1835,31 +1853,75 @@ class MainWindow(QMainWindow):
                 f"({r.porcentaje_reduccion:.1f}% menos)\n{destino}",
             )
 
-    def _convertir_a_png(self) -> None:
-        doc = self._documento_o_aviso("Convertir a imágenes PNG")
+    def _convertir_tablas(self) -> None:
+        doc = self._documento_o_aviso("Convertir tablas")
         if doc is None:
             return
-        dpi, ok = QInputDialog.getInt(
-            self, "Convertir a imágenes PNG", "Resolución (DPI):", DPI_POR_DEFECTO, 30, 600
-        )
-        if not ok:
+        # La detección recorre el documento: con el cursor de espera, porque el
+        # diálogo la repite cada vez que se cambia de estrategia.
+        def detectar(estrategia: EstrategiaTablas) -> tuple[TablaDetectada, ...]:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                return self._detectar_tablas.ejecutar(doc, estrategia)
+            finally:
+                QApplication.restoreOverrideCursor()
+
+        dialogo = ConversionTablasDialog(detectar, self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
             return
+        formato = dialogo.formato()
+        estrategia = dialogo.estrategia()
+        directorio = QFileDialog.getExistingDirectory(self, "Carpeta para las tablas")
+        if not directorio:
+            return
+        salida = Path(directorio)
+        res = ejecutar_con_progreso(
+            self,
+            "Convirtiendo tablas…",
+            lambda p: self._convertir_tablas_caso.ejecutar(
+                doc, salida, formato, estrategia, p
+            ),
+        )
+        if res.cancelado or res.error is not None:
+            self._tras_tarea(res, "")
+            return
+        rutas = res.resultado if isinstance(res.resultado, list) else []
+        detalle = (
+            f"{len(dialogo.detectadas())} tabla(s) en:\n{rutas[0]}"
+            if formato is FormatoTabla.XLSX and rutas
+            else f"{len(rutas)} tabla(s) en:\n{salida}"
+        )
+        QMessageBox.information(self, "Hecho", f"Convertidas {detalle}")
+
+    def _convertir_a_imagenes(self) -> None:
+        doc = self._documento_o_aviso("Convertir a imágenes")
+        if doc is None:
+            return
+        dialogo = ConversionImagenesSalidaDialog(self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        formato = dialogo.formato()
+        dpi = dialogo.dpi()
+        calidad = dialogo.calidad()
         directorio = QFileDialog.getExistingDirectory(self, "Carpeta para las imágenes")
         if not directorio:
             return
         salida = Path(directorio)
         res = ejecutar_con_progreso(
             self,
-            "Convirtiendo a PNG…",
-            lambda p: self._exportar_png.ejecutar(doc, salida, dpi, p),
+            f"Convirtiendo a {formato.name}…",
+            lambda p: self._exportar_png.ejecutar(doc, salida, dpi, formato, calidad, p),
         )
         if res.cancelado or res.error is not None:
             self._tras_tarea(res, "")
             return
         rutas = res.resultado if isinstance(res.resultado, list) else []
-        QMessageBox.information(
-            self, "Hecho", f"Convertidas {len(rutas)} páginas a imágenes en:\n{salida}"
+        hecho = (
+            f"Convertidas {doc.num_paginas} páginas a un único fichero:\n{rutas[0]}"
+            if formato.es_multipagina and rutas
+            else f"Convertidas {len(rutas)} páginas a imágenes en:\n{salida}"
         )
+        QMessageBox.information(self, "Hecho", hecho)
 
     def _convertir_a_texto(self) -> None:
         doc = self._documento_o_aviso("Convertir a texto plano")
@@ -1888,6 +1950,7 @@ class MainWindow(QMainWindow):
             self._accion_convertir_html,
             self._accion_convertir_md,
             self._accion_convertir_texto,
+            self._accion_convertir_tablas,
             self._accion_convertir_png,
         ):
             accion.setEnabled(hay)

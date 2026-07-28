@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from lectorpdf.core.domain.contenido import Coincidencia
+from lectorpdf.core.domain.conversion import CALIDAD_POR_DEFECTO, FormatoImagen
 from lectorpdf.core.domain.errores import CampoNoEncontrado, DocumentoNoAbierto
 from lectorpdf.core.domain.firma_digital import (
     ConfigFirma,
@@ -181,6 +182,7 @@ class FakeServicioHerramientas:
         self.protecciones: list[tuple[str, Path, str]] = []
         self.compresiones: list[tuple[str, Path]] = []
         self.exportaciones_png: list[tuple[str, Path, int]] = []
+        self.formatos_pedidos: list[tuple[FormatoImagen, int]] = []
         self.exportaciones_texto: list[tuple[str, Path]] = []
         # Valores devueltos configurables.
         self.paginas_resultado: tuple[Pagina, ...] = ()
@@ -233,16 +235,19 @@ class FakeServicioHerramientas:
         self.compresiones.append((documento_id, destino))
         return self.resultado_compresion
 
-    def exportar_png(
+    def exportar_imagenes(
         self,
         documento_id: str,
         directorio: Path,
         dpi: int,
+        formato: FormatoImagen = FormatoImagen.PNG,
+        calidad: int = CALIDAD_POR_DEFECTO,
         progreso: Progreso | None = None,
     ) -> list[Path]:
         if progreso is not None:
             progreso(1, 1)
         self.exportaciones_png.append((documento_id, directorio, dpi))
+        self.formatos_pedidos.append((formato, calidad))
         return self.rutas_png
 
     def exportar_texto(self, documento_id: str, destino: Path) -> None:

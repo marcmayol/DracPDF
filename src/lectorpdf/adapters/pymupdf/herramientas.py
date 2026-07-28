@@ -11,8 +11,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import fitz
+from PIL import Image
 
 from lectorpdf.adapters.pymupdf.registro import Marca, RegistroDocumentos
+from lectorpdf.core.domain.conversion import CALIDAD_POR_DEFECTO, FormatoImagen
 from lectorpdf.core.domain.errores import (
     ContrasenaIncorrecta,
     DocumentoFirmado,
@@ -136,26 +138,78 @@ class PyMuPDFHerramientas:
             progreso(1, 1)
         return ResultadoCompresion(bytes_antes, destino.stat().st_size)
 
-    def exportar_png(
+    def exportar_imagenes(
         self,
         documento_id: str,
         directorio: Path,
         dpi: int,
+        formato: FormatoImagen = FormatoImagen.PNG,
+        calidad: int = CALIDAD_POR_DEFECTO,
         progreso: Progreso | None = None,
     ) -> list[Path]:
         doc = self._registro.obtener(documento_id)
         base = Path(doc.name).stem or "documento"
         directorio.mkdir(parents=True, exist_ok=True)
-        rutas: list[Path] = []
         total = doc.page_count
+
+        if formato.es_vectorial:
+            return self._exportar_svg(doc, directorio, base, total, progreso)
+        if formato.es_multipagina:
+            return self._exportar_tiff(doc, directorio, base, dpi, total, progreso)
+
+        rutas: list[Path] = []
         for i in range(total):
             pix = doc[i].get_pixmap(dpi=dpi)
-            salida = directorio / f"{base}_p{i + 1}.png"
-            pix.save(str(salida))
+            salida = directorio / f"{base}_p{i + 1}{formato.extension}"
+            _escribir_imagen(pix, salida, formato, calidad)
             rutas.append(salida)
             if progreso is not None:
                 progreso(i + 1, total)
         return rutas
+
+    def _exportar_svg(
+        self,
+        doc: fitz.Document,
+        directorio: Path,
+        base: str,
+        total: int,
+        progreso: Progreso | None,
+    ) -> list[Path]:
+        rutas: list[Path] = []
+        for i in range(total):
+            salida = directorio / f"{base}_p{i + 1}.svg"
+            # text_as_path=False deja el texto como texto (editable en Inkscape o
+            # Illustrator); por omisión MuPDF lo convertiría en trazos.
+            salida.write_text(
+                doc[i].get_svg_image(text_as_path=False), encoding="utf-8"
+            )
+            rutas.append(salida)
+            if progreso is not None:
+                progreso(i + 1, total)
+        return rutas
+
+    def _exportar_tiff(
+        self,
+        doc: fitz.Document,
+        directorio: Path,
+        base: str,
+        dpi: int,
+        total: int,
+        progreso: Progreso | None,
+    ) -> list[Path]:
+        """Todas las páginas en un único TIFF, que es lo que lo hace útil."""
+        paginas: list[Image.Image] = []
+        for i in range(total):
+            paginas.append(_a_pillow(doc[i].get_pixmap(dpi=dpi)))
+            if progreso is not None:
+                progreso(i + 1, total)
+        salida = directorio / f"{base}.tiff"
+        if not paginas:
+            raise SinPaginas("El documento no tiene páginas que convertir")
+        paginas[0].save(
+            str(salida), save_all=True, append_images=paginas[1:], compression="tiff_lzw"
+        )
+        return [salida]
 
     def exportar_texto(self, documento_id: str, destino: Path) -> None:
         doc = self._registro.obtener(documento_id)
@@ -175,6 +229,24 @@ class PyMuPDFHerramientas:
     def _validar_indice(doc: fitz.Document, indice: int) -> None:
         if indice < 0 or indice >= doc.page_count:
             raise RangoInvalido(f"Página {indice} fuera de [0, {doc.page_count})")
+
+
+def _a_pillow(pix: fitz.Pixmap) -> Image.Image:
+    """Convierte el pixmap de MuPDF (RGB, sin alfa) a una imagen de Pillow."""
+    return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
+
+def _escribir_imagen(
+    pix: fitz.Pixmap, salida: Path, formato: FormatoImagen, calidad: int
+) -> None:
+    """PNG y JPEG los escribe MuPDF; WEBP necesita Pillow."""
+    if formato is FormatoImagen.PNG:
+        pix.save(str(salida))
+        return
+    if formato is FormatoImagen.JPEG:
+        salida.write_bytes(pix.tobytes("jpg", jpg_quality=calidad))
+        return
+    _a_pillow(pix).save(str(salida), quality=calidad)
 
 
 def _paginas(doc: fitz.Document) -> tuple[Pagina, ...]:

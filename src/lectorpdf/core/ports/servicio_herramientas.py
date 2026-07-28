@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from lectorpdf.core.domain.conversion import CALIDAD_POR_DEFECTO, FormatoImagen
 from lectorpdf.core.domain.herramientas import Progreso, Rango, ResultadoCompresion
 from lectorpdf.core.domain.modelos import Pagina
 
@@ -51,11 +52,13 @@ class ServicioHerramientas(Protocol):
         self, documento_id: str, destino: Path, progreso: Progreso | None = None
     ) -> ResultadoCompresion: ...
 
-    def exportar_png(
+    def exportar_imagenes(
         self,
         documento_id: str,
         directorio: Path,
         dpi: int,
+        formato: FormatoImagen = FormatoImagen.PNG,
+        calidad: int = CALIDAD_POR_DEFECTO,
         progreso: Progreso | None = None,
     ) -> list[Path]: ...
 

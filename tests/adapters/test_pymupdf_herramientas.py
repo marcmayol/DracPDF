@@ -206,7 +206,7 @@ def test_exportar_png_una_por_pagina(tmp_path: Path) -> None:
     servicio, doc_id, registro = _abrir(_pdf(tmp_path / "d.pdf", ["A", "B", "C"]))
     salida = tmp_path / "imgs"
 
-    rutas = servicio.exportar_png(doc_id, salida, dpi=100)
+    rutas = servicio.exportar_imagenes(doc_id, salida, dpi=100)
 
     assert len(rutas) == 3
     assert all(r.suffix == ".png" and r.is_file() for r in rutas)

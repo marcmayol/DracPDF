@@ -17,6 +17,10 @@ dependencies = [
     "pdf2docx>=0.5.13",
     "mammoth>=1.12.0",
     "packaging>=24.0",
+    # Solo para los formatos de imagen que MuPDF no escribe: WEBP y TIFF.
+    "pillow>=10.0",
+    # Solo para convertir las tablas detectadas a hoja de cálculo.
+    "openpyxl>=3.1.5",
 ]
 
 [project.scripts]
@@ -81,6 +85,8 @@ module = [
     "docx.*",
     "lxml",
     "lxml.*",
+    "openpyxl",
+    "openpyxl.*",
 ]
 ignore_missing_imports = true
 # pyHanko trae tipos parciales; lo tratamos como no tipado para no arrastrar sus

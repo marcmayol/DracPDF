@@ -66,7 +66,8 @@ _ESPERADAS: dict[str, str | None] = {
     "Markdown (.md)…": None,
     "HTML (.html)…": None,
     "Texto plano (.txt)…": None,
-    "Imágenes PNG…": None,
+    "Tablas (CSV, Excel)…": None,
+    "Imágenes (PNG, JPEG, WEBP, TIFF, SVG)…": None,
     # Archivo → Convertir a PDF (entrantes)
     "Desde Word (reformateado)…": None,
     "Desde OpenDocument (.odt, reformateado)…": None,
@@ -191,7 +192,8 @@ def test_conversiones_salientes_deshabilitadas_sin_documento(
             "Markdown (.md)…",
             "HTML (.html)…",
             "Texto plano (.txt)…",
-            "Imágenes PNG…",
+        "Tablas (CSV, Excel)…",
+            "Imágenes (PNG, JPEG, WEBP, TIFF, SVG)…",
         )
         # Sin documento: las salientes deshabilitadas; Word→PDF (externo) habilitada.
         assert all(not acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]

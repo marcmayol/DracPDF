@@ -28,6 +28,36 @@ A4 = ConfigPagina()
 CARTA = ConfigPagina(ancho_mm=215.9, alto_mm=279.4)
 
 
+class FormatoImagen(Enum):
+    """Formato de salida al convertir las páginas del documento a imágenes."""
+
+    PNG = "png"  # sin pérdida, el más compatible
+    JPEG = "jpg"  # con pérdida, mucho más ligero a DPI altos
+    WEBP = "webp"  # con pérdida, más ligero que JPEG a igual calidad
+    TIFF = "tiff"  # sin pérdida y multipágina: un solo fichero
+    SVG = "svg"  # vectorial: escala sin pixelar y conserva el texto
+
+    @property
+    def extension(self) -> str:
+        return f".{self.value}"
+
+    @property
+    def es_vectorial(self) -> bool:
+        return self is FormatoImagen.SVG
+
+    @property
+    def es_multipagina(self) -> bool:
+        """El TIFF admite todas las páginas dentro del mismo fichero."""
+        return self is FormatoImagen.TIFF
+
+    @property
+    def admite_calidad(self) -> bool:
+        return self in (FormatoImagen.JPEG, FormatoImagen.WEBP)
+
+
+CALIDAD_POR_DEFECTO = 85
+
+
 class AjusteImagen(Enum):
     """Cómo se acomoda cada imagen en su página al convertir imágenes a PDF."""
 
