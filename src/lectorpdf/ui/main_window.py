@@ -744,11 +744,13 @@ class MainWindow(QMainWindow):
         barra = QToolBar("Navegación", self)
         self.addToolBar(barra)
 
-        # Toolbar según la maqueta Ladón: solo los controles frecuentes. Buscar,
-        # imprimir, ajustes de vista, doble página, rotar y pantalla completa NO
-        # van aquí (viven en los menús Edición/Ver y siguen con su atajo).
+        # Toolbar según la maqueta Ladón (pantalla 11b): abrir, guardar, buscar e
+        # imprimir. Los ajustes de vista, doble página, rotar y pantalla completa
+        # NO van aquí (viven en el menú Ver y siguen con su atajo).
         self._accion_icono(barra, "open", "Abrir…", self._abrir_por_dialogo)
         self._accion_icono(barra, "save", "Guardar", self._guardar)
+        self._accion_icono(barra, "search", "Buscar…", self._activar_busqueda)
+        self._accion_icono(barra, "print", "Imprimir…", self._imprimir)
         barra.addSeparator()
         self._control_pagina = ControlPagina()
         self._control_pagina.anterior.connect(self._pagina_anterior)
