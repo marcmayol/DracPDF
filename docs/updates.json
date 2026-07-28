@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
-  "url": "https://github.com/marcmayol/DracPDF/releases/download/v0.4.0/DracPDF-0.4.0-setup.exe",
-  "sha256": "aba14fa1d847016607792c8bc3df7cd6befbb435f4e9c4efeb8d6ca45344c987",
-  "notas": "Fase 11: conversiones a y desde ODT, RTF, Markdown, HTML, texto e imagenes; tablas a CSV y Excel; salidas JPEG, WEBP, TIFF y SVG. Todas las salidas unificadas bajo Documento > Convertir a. Arreglos: miniaturas invisibles en el panel lateral e icono de guardar.",
+  "version": "0.4.1",
+  "url": "https://github.com/marcmayol/DracPDF/releases/download/v0.4.1/DracPDF-0.4.1-setup.exe",
+  "sha256": "2fb32c0ae1e1423722f1162040a8dbdd3d0d5a0d612e80869ca24bfc2bbead1e",
+  "notas": "El 100 por cien del visor ahora es tamano real, como en Adobe: antes el documento se veia un tercio mas pequeno. Arregla tambien el tamano de la firma dibujada, que se estampaba mas grande de lo que se veia al colocarla.",
   "check_horas": 24,
   "canal": null,
   "porcentaje_despliegue": null
