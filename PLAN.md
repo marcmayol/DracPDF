@@ -228,9 +228,9 @@ Amplía el abanico en las dos direcciones, sobre el submenú unificado "Converti
 #### Parte A: salientes (PDF → otros formatos)
 1. **Imágenes con formato elegible**: PNG (actual) y JPEG con calidad configurable, ambos nativos de PyMuPDF; WEBP y TIFF vía Pillow, con TIFF multipágina en un único fichero (el resto, una imagen por página). El diálogo actual de DPI crece con el selector de formato y recuerda la última elección
 2. **SVG por página** (`page.get_svg_image()`): vectorial, nombres correlativos como los PNG
-3. **Tablas a CSV**: `page.find_tables()` por página; un CSV por tabla con nombre `<documento>-p<N>-t<M>.csv`. El diálogo declara cuántas tablas se han detectado y en qué páginas ANTES de convertir, y si no hay ninguna lo dice en vez de escribir ficheros vacíos
+3. **Tablas a CSV**: `page.find_tables()` por página; un CSV por tabla con nombre `<documento>_p<N>_t<M>.csv`. El diálogo declara cuántas tablas se han detectado y en qué páginas ANTES de convertir, y si no hay ninguna lo dice en vez de escribir ficheros vacíos. **Ajuste hecho al probarlo con documentos reales:** ninguna estrategia de detección sirve sola (la de líneas no ve las tablas alineadas solo con espacios; la de texto trocea párrafos corrientes en decenas de filas de basura), así que se ofrecen las dos, la aproximada va marcada como tal y con aviso, y sin tablas no se deja aceptar
 4. **Tablas a XLSX** (openpyxl): una hoja por tabla, con el mismo recuento previo que el CSV
-5. **ODT**: se escribe el paquete ODF a mano (zip con `mimetype` sin comprimir, `META-INF/manifest.xml`, `styles.xml` y `content.xml`) desde la misma estructura de párrafos y tamaños que ya alimenta a Markdown; sin dependencias nuevas
+5. **ODT**: se escribe el paquete ODF a mano (zip con `mimetype` sin comprimir, `META-INF/manifest.xml`, `styles.xml` y `content.xml`) desde la misma estructura de párrafos y tamaños que ya alimenta a Markdown; sin dependencias nuevas. Esa deducción (el tamaño de fuente más frecuente es el cuerpo; lo notablemente mayor, un título) sale del generador de Markdown a `adapters/pymupdf/estructura.py`, y de ahí comen los tres formatos
 6. **RTF**: se genera RTF 1.x desde esa misma estructura (párrafos, negrita, cursiva, tamaños), con los no-ASCII escapados como `\uN?`; sin dependencias nuevas
 
 #### Parte B: entrantes (otros formatos → PDF)
