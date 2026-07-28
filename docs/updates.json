@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
-  "url": "https://github.com/marcmayol/DracPDF/releases/download/v0.3.0/DracPDF-0.3.0-setup.exe",
-  "sha256": "de1909a95cbaac3ba0b9a50bd8147cfa7d76c6975d4292292a9390b20a4d8738",
-  "notas": "Fase 9 (texto, anotaciones e imágenes) y Fase 10 (actualizaciones automáticas).",
+  "version": "0.4.0",
+  "url": "https://github.com/marcmayol/DracPDF/releases/download/v0.4.0/DracPDF-0.4.0-setup.exe",
+  "sha256": "aba14fa1d847016607792c8bc3df7cd6befbb435f4e9c4efeb8d6ca45344c987",
+  "notas": "Fase 11: conversiones a y desde ODT, RTF, Markdown, HTML, texto e imagenes; tablas a CSV y Excel; salidas JPEG, WEBP, TIFF y SVG. Todas las salidas unificadas bajo Documento > Convertir a. Arreglos: miniaturas invisibles en el panel lateral e icono de guardar.",
   "check_horas": 24,
   "canal": null,
   "porcentaje_despliegue": null
