@@ -79,7 +79,7 @@ class DigitalSealLayer:
             ),
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
         config = ConfigFirma(pagina=pagina, rect_pt=rect_pt, razon=self._razon)
         documento = self._documento

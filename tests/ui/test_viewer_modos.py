@@ -9,7 +9,7 @@ import pytest
 
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
-from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget
+from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget, factor_dpi
 from tests.core.fakes import FakeDocumentRepository
 
 
@@ -54,9 +54,10 @@ def test_rotacion_intercambia_ancho_y_alto(qapp: object) -> None:
     visor.rotar_vista(90)
 
     assert visor.rotacion() == 90
-    # 100x200 pt rotado 90 -> 200x100 en la geometría.
-    assert visor._geometria[0].width() == 200.0
-    assert visor._geometria[0].height() == 100.0
+    # 100x200 pt rotado 90 -> 200x100 pt en la geometría (por el factor DPI).
+    f = factor_dpi()
+    assert visor._geometria[0].width() == pytest.approx(200.0 * f)
+    assert visor._geometria[0].height() == pytest.approx(100.0 * f)
 
 
 def test_rotar_a_la_izquierda(qapp: object) -> None:
@@ -67,8 +68,9 @@ def test_rotar_a_la_izquierda(qapp: object) -> None:
     visor.rotar_vista(-90)  # izquierda
 
     assert visor.rotacion() == 270
-    assert visor._geometria[0].width() == 200.0  # también intercambia ancho/alto
-    assert visor._geometria[0].height() == 100.0
+    f = factor_dpi()  # también intercambia ancho/alto
+    assert visor._geometria[0].width() == pytest.approx(200.0 * f)
+    assert visor._geometria[0].height() == pytest.approx(100.0 * f)
 
 
 def test_ajuste_ancho_persiste_al_cambiar_tamano(qapp: object) -> None:
@@ -80,7 +82,8 @@ def test_ajuste_ancho_persiste_al_cambiar_tamano(qapp: object) -> None:
     assert visor.modo_ajuste() == "ANCHO"
 
     visor.resize(800, 400)  # el modo se re-aplica al nuevo ancho
-    esperado = (visor.viewport().width() - 2 * MARGEN_PX) / 100.0
+    # escala_para_ancho devuelve zoom, no píxeles por punto.
+    esperado = (visor.viewport().width() - 2 * MARGEN_PX) / 100.0 / factor_dpi()
     assert visor.escala == pytest.approx(esperado, rel=1e-3)
 
 

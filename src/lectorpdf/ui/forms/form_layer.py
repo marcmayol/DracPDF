@@ -147,7 +147,7 @@ class FormLayer:
             campo.rect_pt,
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
         proxy.setGeometry(QRectF(r.x, r.y, r.ancho, r.alto))
 

@@ -15,6 +15,7 @@ from lectorpdf.ui.viewer.viewer_widget import (
     FACTOR_ZOOM,
     MARGEN_PX,
     ViewerWidget,
+    factor_dpi,
 )
 from tests.core.fakes import FakeDocumentRepository
 
@@ -59,8 +60,11 @@ def test_geometria_apila_verticalmente_con_margen(qapp: object) -> None:
 
     visor.set_documento(documento, escala=1.0)
 
-    assert visor._geometria[0].height() == 200.0
-    assert visor._geometria[1].top() == MARGEN_PX + 200.0 + MARGEN_PX
+    f = factor_dpi()
+    assert visor._geometria[0].height() == pytest.approx(200.0 * f)
+    assert visor._geometria[1].top() == pytest.approx(
+        MARGEN_PX + 200.0 * f + MARGEN_PX
+    )
 
 
 def test_escala_afecta_al_tamano_de_las_paginas(qapp: object) -> None:
@@ -69,8 +73,9 @@ def test_escala_afecta_al_tamano_de_las_paginas(qapp: object) -> None:
 
     visor.set_documento(documento, escala=2.0)
 
-    assert visor._geometria[0].width() == 200.0
-    assert visor._geometria[0].height() == 400.0
+    f = factor_dpi()
+    assert visor._geometria[0].width() == pytest.approx(200.0 * f)
+    assert visor._geometria[0].height() == pytest.approx(400.0 * f)
 
 
 # -- Selección de páginas visibles (± 1) -----------------------------------
@@ -179,7 +184,9 @@ def test_zoom_reconstruye_geometria_con_el_nuevo_tamano(qapp: object) -> None:
 
     visor.set_escala(2.0)
 
-    assert visor._geometria[0].width() == 200.0  # 100 pt * 2.0
+    assert visor._geometria[0].width() == pytest.approx(
+        200.0 * factor_dpi()
+    )  # 100 pt * zoom 2.0
 
 
 def test_ajustar_a_ancho_llena_el_viewport(qapp: object) -> None:
@@ -191,7 +198,7 @@ def test_ajustar_a_ancho_llena_el_viewport(qapp: object) -> None:
     escala = visor.escala_para_ancho()
 
     disponible = visor.viewport().width() - 2 * MARGEN_PX
-    assert escala == pytest.approx(disponible / 100.0)
+    assert escala == pytest.approx(disponible / 100.0 / factor_dpi())
 
 
 # -- Navegación -------------------------------------------------------------

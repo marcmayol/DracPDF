@@ -52,10 +52,10 @@ class TextoLayer:
         pagina = self._visor.pagina_actual()
         rect_pagina = self._visor.rect_pagina(pagina)
         ancho = (rect_pagina.width() if rect_pagina else 300.0) * _FRACCION_ANCHO_PAGINA
-        alto = max(tamano * self._visor.escala * 2.2, 40.0)
+        alto = max(tamano * self._visor.escala_px * 2.2, 40.0)
 
         item = TextPlacementItem(
-            texto, fuente, tamano * self._visor.escala, color, ancho, alto
+            texto, fuente, tamano * self._visor.escala_px, color, ancho, alto
         )
         escena = self._visor.scene()
         if escena is not None:
@@ -88,7 +88,7 @@ class TextoLayer:
             ),
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
         texto = TextoNuevo(rect_pt, self._texto, self._fuente, self._tamano, self._color)
         self._caso.ejecutar(self._documento, pagina, texto)

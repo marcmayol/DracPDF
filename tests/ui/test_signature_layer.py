@@ -5,12 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import fitz
+import pytest
 
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 from lectorpdf.core.use_cases.estampar_firma import EstamparFirma
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.signature.signature_layer import SignatureLayer
-from lectorpdf.ui.viewer.viewer_widget import ViewerWidget
+from lectorpdf.ui.viewer.viewer_widget import ViewerWidget, factor_dpi
 from tests.core.fakes import FakeDocumentRepository, FakeEstampadoService
 
 
@@ -113,20 +114,26 @@ def test_redimensionar_y_mover_antes_de_confirmar(qapp: object) -> None:
     assert item is not None
     item.redimensionar_desde_ancho(120.0)
     ancho, alto = item.tamano()
-    # Colocar la esquina superior izquierda del item en (40, 30) de la página 0.
+    # Colocar la esquina superior izquierda del item en (40, 30) PUNTOS de la
+    # página 0: en pantalla son esos puntos por el factor DPI.
     rect_pagina = visor.rect_pagina(0)
     assert rect_pagina is not None
-    item.setPos(QPointF(rect_pagina.left() + 40.0, rect_pagina.top() + 30.0))
+    f = factor_dpi()
+    item.setPos(
+        QPointF(rect_pagina.left() + 40.0 * f, rect_pagina.top() + 30.0 * f)
+    )
 
     pagina = capa.confirmar()
 
     assert pagina == 0
     _, _, rect_pt, _ = servicio.estampados[0]
-    # A escala 1.0, el rect en puntos coincide con el desplazamiento y tamaño.
-    assert rect_pt.x0 == 40.0
-    assert rect_pt.y0 == 30.0
-    assert rect_pt.x1 == 40.0 + ancho
-    assert rect_pt.y1 == 30.0 + alto
+    # A zoom 1.0 el rect en puntos coincide con el desplazamiento y tamaño.
+    assert rect_pt.x0 == pytest.approx(40.0)
+    assert rect_pt.y0 == pytest.approx(30.0)
+    # El tamaño del item está en píxeles de pantalla: sobre el papel son esos
+    # píxeles entre el factor DPI (120 px de ancho = 90 pt).
+    assert rect_pt.x1 == pytest.approx(40.0 + ancho / f)
+    assert rect_pt.y1 == pytest.approx(30.0 + alto / f)
 
 
 def test_confirmar_sin_colocar_no_hace_nada(qapp: object) -> None:

@@ -208,7 +208,7 @@ class SeleccionLayer(QObject):
                 self._sel_palabras[i].rect_pt,
                 rect_pagina.left(),
                 rect_pagina.top(),
-                self._visor.escala,
+                self._visor.escala_px,
             )
             item = escena.addRect(QRectF(r.x, r.y, r.ancho, r.alto), pluma, pincel)
             item.setZValue(_Z_SELECCION)

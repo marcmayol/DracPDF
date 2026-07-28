@@ -76,7 +76,7 @@ class BusquedaLayer:
                 coincidencia.rect_pt,
                 rect_pagina.left(),
                 rect_pagina.top(),
-                self._visor.escala,
+                self._visor.escala_px,
             )
             es_activa = indice == self._activa
             item = escena.addRect(

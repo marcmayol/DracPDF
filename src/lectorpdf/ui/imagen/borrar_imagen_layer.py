@@ -75,7 +75,7 @@ class BorrarImagenLayer(QObject):
             self._hover.rect_pt,
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
         color = QColor(tokens.OVERLAY_FIRMA)
         relleno = QColor(color)

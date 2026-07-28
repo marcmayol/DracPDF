@@ -79,7 +79,7 @@ class SignatureLayer:
             ),
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
 
         self._caso.ejecutar(self._documento, pagina, rect_pt, self._png)

@@ -84,7 +84,7 @@ class ImagenLayer:
             ),
             rect_pagina.left(),
             rect_pagina.top(),
-            self._visor.escala,
+            self._visor.escala_px,
         )
         imagen = ImagenNueva(rect_pt, self._ruta, self._conservar)
         self._caso.ejecutar(self._documento, pagina, imagen)

@@ -16,6 +16,7 @@ from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QGuiApplication,
     QPen,
     QPixmap,
     QResizeEvent,
@@ -45,6 +46,8 @@ _COLOR_BORDE = QColor(PAPEL_BORDE)
 ESCALA_MIN = 0.1
 ESCALA_MAX = 8.0
 FACTOR_ZOOM = 1.25
+_PUNTOS_POR_PULGADA = 72.0  # unidad del PDF
+_DPI_POR_DEFECTO = 96.0  # el de Windows al 100 % de escalado
 
 _ClaveRender = tuple[int, float]
 
@@ -101,7 +104,20 @@ class ViewerWidget(QGraphicsView):
 
     @property
     def escala(self) -> float:
+        """Zoom del usuario: 1.0 = 100% = tamaño físico real en pantalla."""
         return self._escala
+
+    @property
+    def escala_px(self) -> float:
+        """Píxeles por punto PDF con el zoom actual.
+
+        Un punto PDF es 1/72 de pulgada, pero la pantalla tiene ~96 puntos por
+        pulgada: al 100 % hay que pintar 96/72 píxeles por punto, o el documento
+        se vería más pequeño que en cualquier otro visor. Es la escala con la que
+        traducen sus coordenadas las capas que dibujan sobre la página
+        (formularios, búsqueda, firma, anotaciones).
+        """
+        return self._escala * factor_dpi()
 
     def indices_mostrados(self) -> set[int]:
         """Páginas actualmente pintadas en la escena (para tests/diagnóstico)."""
@@ -135,7 +151,7 @@ class ViewerWidget(QGraphicsView):
         return [[p] for p in paginas]
 
     def _ancho_fila_px(self, fila: Sequence[Pagina]) -> float:
-        paginas = sum(self._dims_pt(p)[0] for p in fila) * self._escala
+        paginas = sum(self._dims_pt(p)[0] for p in fila) * self.escala_px
         return paginas + MARGEN_PX * (len(fila) - 1)  # separación entre las dos
 
     def _construir_escena(self) -> None:
@@ -152,12 +168,12 @@ class ViewerWidget(QGraphicsView):
 
         y = MARGEN_PX
         for fila in filas:
-            alto_fila = max(self._dims_pt(p)[1] for p in fila) * self._escala
+            alto_fila = max(self._dims_pt(p)[1] for p in fila) * self.escala_px
             x = (ancho_max - self._ancho_fila_px(fila)) / 2.0
             for pagina in fila:
                 aw, ah = self._dims_pt(pagina)
-                ancho_px = aw * self._escala
-                alto_px = ah * self._escala
+                ancho_px = aw * self.escala_px
+                alto_px = ah * self.escala_px
                 yy = y + (alto_fila - alto_px) / 2.0  # centrado vertical en la fila
                 rect = QRectF(x, yy, ancho_px, alto_px)
                 self._geometria[pagina.indice] = rect
@@ -191,7 +207,7 @@ class ViewerWidget(QGraphicsView):
             return None
         rect = self._geometria[pagina]
         x, y = punto_escena_a_pdf(
-            escena.x(), escena.y(), rect.left(), rect.top(), self._escala
+            escena.x(), escena.y(), rect.left(), rect.top(), self.escala_px
         )
         return pagina, x, y
 
@@ -250,10 +266,12 @@ class ViewerWidget(QGraphicsView):
     def _mostrar_pagina(self, indice: int) -> None:
         if self._documento is None or indice in self._pixmaps:
             return
-        clave: _ClaveRender = (indice, self._escala)
+        clave: _ClaveRender = (indice, self.escala_px)
         pixmap = self._cache.obtener(clave)
         if pixmap is None:
-            imagen = self._caso_render.ejecutar(self._documento, indice, self._escala)
+            imagen = self._caso_render.ejecutar(
+                self._documento, indice, self.escala_px
+            )
             pixmap = qpixmap_desde(imagen)
             self._cache.poner(clave, pixmap)
 
@@ -291,7 +309,7 @@ class ViewerWidget(QGraphicsView):
         if rect_pagina is None:
             return
         r = rect_pdf_a_escena(
-            rect_pt, rect_pagina.left(), rect_pagina.top(), self._escala
+            rect_pt, rect_pagina.left(), rect_pagina.top(), self.escala_px
         )
         self.centerOn(r.x + r.ancho / 2.0, r.y + r.alto / 2.0)
         self._actualizar_paginas_visibles()
@@ -359,7 +377,7 @@ class ViewerWidget(QGraphicsView):
             self._aplicar_escala(self.escala_para_pagina())
 
     def escala_para_ancho(self) -> float:
-        """Escala que hace caber el ancho del contenido más ancho (una página, o
+        """Zoom que hace caber el ancho del contenido más ancho (una página, o
         el par de páginas en modo doble) en la vista."""
         if self._documento is None:
             return self._escala
@@ -367,10 +385,11 @@ class ViewerWidget(QGraphicsView):
             sum(self._dims_pt(p)[0] for p in fila) for fila in self._filas()
         )
         disponible = self.viewport().width() - 2 * MARGEN_PX
-        return _acotar_escala(disponible / ancho_max_pt)
+        # El cociente da píxeles por punto; el zoom es eso entre el factor DPI.
+        return _acotar_escala(disponible / ancho_max_pt / factor_dpi())
 
     def escala_para_pagina(self) -> float:
-        """Escala que hace caber la página actual entera (ancho y alto). En modo
+        """Zoom que hace caber la página actual entera (ancho y alto). En modo
         doble el ancho disponible se reparte entre las dos páginas."""
         if self._documento is None:
             return self._escala
@@ -378,7 +397,7 @@ class ViewerWidget(QGraphicsView):
         factor = 2 if self._doble else 1
         escala_ancho = (self.viewport().width() - 2 * MARGEN_PX) / (aw * factor)
         escala_alto = (self.viewport().height() - 2 * MARGEN_PX) / ah
-        return _acotar_escala(min(escala_ancho, escala_alto))
+        return _acotar_escala(min(escala_ancho, escala_alto) / factor_dpi())
 
     def ajustar_a_ancho(self) -> None:
         self._set_modo(ModoAjuste.ANCHO)
@@ -436,6 +455,21 @@ class ViewerWidget(QGraphicsView):
         super().resizeEvent(event)
         self._refit_si_procede()  # el ajuste ancho/página se re-aplica al tamaño
         self._actualizar_paginas_visibles()
+
+
+def factor_dpi() -> float:
+    """Píxeles de pantalla por punto PDF al 100 % de zoom.
+
+    Un punto PDF es 1/72 de pulgada y la pantalla ronda los 96 puntos por
+    pulgada, así que el 100 % son ~1,333 px por punto. Pintar 1 px por punto
+    (lo que hacía antes) mostraba el documento un 25 % más pequeño que Adobe y
+    que el resto de visores, y "100 %" dejaba de significar tamaño real.
+    """
+    pantalla = QGuiApplication.primaryScreen()
+    if pantalla is None:  # sin pantalla (tests offscreen): el valor de Windows
+        return _DPI_POR_DEFECTO / _PUNTOS_POR_PULGADA
+    dpi = pantalla.logicalDotsPerInch() or _DPI_POR_DEFECTO
+    return float(dpi) / _PUNTOS_POR_PULGADA
 
 
 def _acotar_escala(escala: float) -> float:

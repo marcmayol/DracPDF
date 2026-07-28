@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PySide6.QtWidgets import QLineEdit
 
 from lectorpdf.core.domain.formularios import (
@@ -15,7 +16,7 @@ from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 from lectorpdf.core.use_cases.rellenar_campo import RellenarCampo
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
 from lectorpdf.ui.forms.form_layer import FormLayer
-from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget
+from lectorpdf.ui.viewer.viewer_widget import MARGEN_PX, ViewerWidget, factor_dpi
 from tests.core.fakes import FakeDocumentRepository, FakeFormService
 
 
@@ -68,12 +69,15 @@ def test_proxy_alineado_con_la_transformacion(qapp: object) -> None:
     capa.set_campos((_campo("0:0", pagina=0),))
     rect = capa.proxies()["0:0"].sceneBoundingRect()
 
-    # Página 0: origen en (x=?, y=MARGEN). El campo está en (50,60)+origen.
+    # Página 0: origen en (x=?, y=MARGEN). El campo está en (50,60)+origen, en
+    # puntos PDF: en pantalla van multiplicados por el factor DPI, igual que la
+    # página sobre la que se dibujan.
     origen = visor.rect_pagina(0)
-    assert rect.left() == origen.left() + 50.0
-    assert rect.top() == MARGEN_PX + 60.0
-    assert rect.width() == 200.0
-    assert rect.height() == 20.0
+    f = factor_dpi()
+    assert rect.left() == pytest.approx(origen.left() + 50.0 * f)
+    assert rect.top() == pytest.approx(MARGEN_PX + 60.0 * f)
+    assert rect.width() == pytest.approx(200.0 * f)
+    assert rect.height() == pytest.approx(20.0 * f)
 
 
 def test_proxy_se_realinea_tras_zoom(qapp: object) -> None:
@@ -87,10 +91,11 @@ def test_proxy_se_realinea_tras_zoom(qapp: object) -> None:
     rect = capa.proxies()["0:0"].sceneBoundingRect()
 
     origen = visor.rect_pagina(0)
-    # A escala 2.0 el campo dobla posición relativa y tamaño.
-    assert rect.left() == origen.left() + 100.0
-    assert rect.width() == 400.0
-    assert rect.height() == 40.0
+    # A zoom 2.0 el campo dobla posición relativa y tamaño (sobre el tamaño real).
+    f = factor_dpi()
+    assert rect.left() == pytest.approx(origen.left() + 100.0 * f)
+    assert rect.width() == pytest.approx(400.0 * f)
+    assert rect.height() == pytest.approx(40.0 * f)
 
 
 def test_editar_proxy_escribe_y_actualiza_cache(qapp: object) -> None:

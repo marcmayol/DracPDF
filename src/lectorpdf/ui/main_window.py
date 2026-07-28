@@ -1441,8 +1441,8 @@ class MainWindow(QMainWindow):
         rect_pagina = vista.visor.rect_pagina(pagina)
         if rect_pagina is None:
             return None
-        x_pt = (escena.x() - rect_pagina.left()) / vista.visor.escala
-        y_pt = (escena.y() - rect_pagina.top()) / vista.visor.escala
+        x_pt = (escena.x() - rect_pagina.left()) / vista.visor.escala_px
+        y_pt = (escena.y() - rect_pagina.top()) / vista.visor.escala_px
         return pagina, x_pt, y_pt
 
     def _anotacion_bajo(
