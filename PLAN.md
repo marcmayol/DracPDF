@@ -103,7 +103,7 @@ Operaciones de manipulación de PDF integradas en un menú "Herramientas" y en e
 4. **Proteger**: cifrar con contraseña.
 5. **Desproteger**: quitar la contraseña (reabrir sin cifrado, con igualdad de contenido verificable).
 6. **Comprimir**: reducir el tamaño del fichero, reportando la reducción.
-7. **Exportar**: a PNG (una imagen por página) y a texto.
+7. **Exportar**: a PNG (una imagen por página) y a texto. (Ambas viven hoy en Documento → "Convertir a" junto al resto de salidas; ver la nota de la Fase 7.)
 
 #### Reglas propias de esta fase
 - Unir opera sobre rutas de ficheros cerrados, no sobre documentos del registro.
@@ -131,6 +131,8 @@ Restricción global: todo llega por pip y viaja dentro del instalador; prohibido
 8. Las conversiones salientes van en Documento → Convertir (submenú: A Word..., A HTML..., A Markdown...), operando sobre el documento abierto, con el worker de progreso y cancelación existente; deshabilitadas sin documento abierto.
 9. Word → PDF va en Archivo → "Convertir Word a PDF..." (no opera sobre el documento abierto: pide un .docx externo); al terminar ofrece abrir el PDF resultante.
 10. Tabla de acciones de la fase declarada en el test de inventario: las cuatro acciones con su menú de destino y condición de habilitación.
+
+> **Revisión posterior (uso real):** los usuarios leían "Exportar a texto" como una operación distinta de "Convertir a Word". Todas las salidas del documento pasan a un único submenú Documento → **"Convertir a"** (Word (.docx), Markdown (.md), HTML (.html), Texto plano (.txt) y, tras separador, Imágenes PNG), las cinco deshabilitadas sin documento abierto. Word → PDF sigue en Archivo por no operar sobre el documento abierto. Los casos de uso conservan sus nombres (`ExportarTexto`, `ExportarImagenes`): describen la operación técnica, mientras la UI habla el idioma del usuario.
 
 #### Reglas propias de esta fase
 - El adaptador de Word→PDF (usa Qt) vive fuera del core: el caso de uso recibe el puerto como cualquier otro.
@@ -218,6 +220,37 @@ La app comprueba un manifiesto propio y se actualiza descargando el instalador d
 - La comprobación automática es silenciosa ante cualquier fallo; solo la manual informa
 
 **Criterio de aceptación:** (funcional, sin red real: contra un servidor local o doble de pruebas) script/tests que demuestran: manifiesto con versión mayor → se reporta actualización con sus notas; igual o menor → sin novedad; JSON roto o servidor caído → la comprobación automática calla y la manual informa del error; descarga con hash incorrecto → se descarta sin ejecutarse; descarga con hash correcto → se invoca el lanzamiento del instalador (doblado en el test); y `publicar_release.py --dry-run` genera un manifiesto válido cuyo sha256 coincide con el instalador construido; todo con exit 0. (UI) inventario en verde con las acciones nuevas y sus condiciones. (E2E real) la propia release de esta fase se publica ejecutando `publicar_release.py`, y se muestra que una instalación de la versión anterior detecta y ofrece la nueva.
+
+### Fase 11: Más formatos de conversión
+
+Amplía el abanico en las dos direcciones, sobre el submenú unificado "Convertir a" de la revisión de la Fase 7. Ningún formato nuevo puede exigir programas instalados en la máquina del usuario: DracPDF sigue siendo un .exe autocontenido.
+
+#### Parte A: salientes (PDF → otros formatos)
+1. **Imágenes con formato elegible**: PNG (actual) y JPEG con calidad configurable, ambos nativos de PyMuPDF; WEBP y TIFF vía Pillow, con TIFF multipágina en un único fichero (el resto, una imagen por página). El diálogo actual de DPI crece con el selector de formato y recuerda la última elección
+2. **SVG por página** (`page.get_svg_image()`): vectorial, nombres correlativos como los PNG
+3. **Tablas a CSV**: `page.find_tables()` por página; un CSV por tabla con nombre `<documento>-p<N>-t<M>.csv`. El diálogo declara cuántas tablas se han detectado y en qué páginas ANTES de convertir, y si no hay ninguna lo dice en vez de escribir ficheros vacíos
+4. **Tablas a XLSX** (openpyxl): una hoja por tabla, con el mismo recuento previo que el CSV
+5. **ODT**: se escribe el paquete ODF a mano (zip con `mimetype` sin comprimir, `META-INF/manifest.xml`, `styles.xml` y `content.xml`) desde la misma estructura de párrafos y tamaños que ya alimenta a Markdown; sin dependencias nuevas
+6. **RTF**: se genera RTF 1.x desde esa misma estructura (párrafos, negrita, cursiva, tamaños), con los no-ASCII escapados como `\uN?`; sin dependencias nuevas
+
+#### Parte B: entrantes (otros formatos → PDF)
+7. **Imágenes → PDF**: selección múltiple con orden editable, una imagen por página; tamaño de página igual a la imagen o A4 con márgenes (elegible). Vía PyMuPDF, sin dependencias
+8. **Markdown, HTML y texto plano → PDF**: reaprovechan la cadena `QTextDocument` → PDF del conversor de Word (`setMarkdown`, `setHtml`, `setPlainText`)
+9. **ODT → PDF**: `content.xml` leído con lxml (ya es dependencia de pdf2docx) y traducido a HTML → cadena Qt existente. Alcance declarado: párrafos, títulos, negrita/cursiva, listas, tablas simples e imágenes embebidas
+10. **RTF → PDF**: parser propio acotado (grupos, `\par`, `\b`, `\i`, `\ul`, `\fs`, `\uN`, control words desconocidas ignoradas) → HTML → cadena Qt. Alcance declarado: texto con formato básico; sin tablas ni imágenes
+11. **Formatos que no se convierten** (`.doc` de Word 97-2003, `.pages`, `.wpd`): aparecen en el filtro del diálogo y, al elegirlos, se explica qué hacer ("ábrelo en Word y guárdalo como .docx") en vez de rechazarlos en silencio. No se integra LibreOffice ni automatización de Word: rompería el .exe autocontenido
+12. **Menús simétricos**: Archivo → "Convertir a PDF" (Word, ODT, RTF, Markdown, HTML, Texto plano, Imágenes) frente a Documento → "Convertir a"; la acción suelta "Convertir Word a PDF (reformateado)…" se absorbe en el nuevo submenú
+13. Inventario de acciones actualizado con las acciones nuevas, su destino y su condición
+
+#### Reglas propias de esta fase
+- Cada conversor nuevo es un adaptador tras el puerto `ConversorPDF`; el core sigue sin Qt y sin PyMuPDF
+- Todo formato que pierda fidelidad se etiqueta "reformateado" en la UI, como ya hace Word → PDF: nada de prometer el diseño exacto
+- Dependencias nuevas admitidas: **Pillow** (WEBP/TIFF) y **openpyxl** (XLSX), ambas wheels que PyInstaller empaqueta sin binarios externos. ODT y RTF se hacen sin dependencias
+- Salidas atómicas (temporal + `replace`), como todo lo que escribe fichero
+- Fixtures por script: el .odt, el .rtf y las imágenes de prueba se generan desde código, nunca binarios a mano en el repo
+- Documentos FIRMADOS: las salientes siguen permitidas (leen, no modifican)
+
+**Criterio de aceptación:** script de verificación sin red que, en salida, convierte un PDF de fixture a PNG/JPEG/WEBP/TIFF/SVG comprobando el número de ficheros y su cabecera mágica, vuelca a CSV y XLSX una tabla conocida comparando celda a celda, y genera ODT y RTF que al releerse (zip + XML el primero, el parser propio el segundo) devuelven el texto esperado; y en entrada, convierte imágenes, Markdown, HTML, texto, ODT y RTF a PDF verificando el número de páginas y el texto extraíble, y demuestra que un `.doc` elegido produce el mensaje guía y ningún fichero; todo con exit 0. Inventario de acciones en verde, pytest en verde y git log con un commit por tarea.
 
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
