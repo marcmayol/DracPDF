@@ -6,16 +6,21 @@ from pathlib import Path
 
 import pytest
 
-from lectorpdf.core.domain.conversion import A4
-from lectorpdf.core.domain.errores import ErrorDominio
+from lectorpdf.core.domain.conversion import A4, AjusteImagen
+from lectorpdf.core.domain.errores import DocumentoNoEncontrado, ErrorDominio
 from lectorpdf.core.domain.herramientas import Rango
 from lectorpdf.core.domain.modelos import Documento, Pagina
 from lectorpdf.core.use_cases.convertir_a_html import ConvertirAHtml
 from lectorpdf.core.use_cases.convertir_a_markdown import ConvertirAMarkdown
 from lectorpdf.core.use_cases.convertir_a_word import ConvertirAWord
+from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
-from tests.core.fakes import FakeConversorPDF, FakeConversorWord
+from tests.core.fakes import (
+    FakeConversorImagenes,
+    FakeConversorPDF,
+    FakeConversorWord,
+)
 
 
 def _documento() -> Documento:
@@ -71,4 +76,53 @@ def test_word_a_pdf_rechaza_no_docx(tmp_path: Path) -> None:
 
     with pytest.raises(ErrorDominio):
         ConvertirWordAPdf(conversor).ejecutar(tmp_path / "x.txt", tmp_path / "s.pdf", A4)
+    assert conversor.conversiones == []
+
+
+def _imagenes(tmp_path: Path, *nombres: str) -> list[Path]:
+    rutas = []
+    for nombre in nombres:
+        ruta = tmp_path / nombre
+        ruta.write_bytes(b"no importa: el caso de uso no abre el fichero")
+        rutas.append(ruta)
+    return rutas
+
+
+def test_imagenes_a_pdf_respeta_el_orden_recibido(tmp_path: Path) -> None:
+    conversor = FakeConversorImagenes()
+    rutas = _imagenes(tmp_path, "b.png", "a.jpg", "c.tiff")
+    destino = tmp_path / "s.pdf"
+
+    ConvertirImagenesAPdf(conversor).ejecutar(rutas, destino)
+
+    convertidas, salida, ajuste = conversor.conversiones[0]
+    assert convertidas == tuple(rutas)  # el orden lo decide quien llama
+    assert salida == destino
+    assert ajuste is AjusteImagen.TAMANO_IMAGEN  # por defecto
+
+
+def test_imagenes_a_pdf_rechaza_lista_vacia(tmp_path: Path) -> None:
+    conversor = FakeConversorImagenes()
+
+    with pytest.raises(ErrorDominio):
+        ConvertirImagenesAPdf(conversor).ejecutar([], tmp_path / "s.pdf")
+    assert conversor.conversiones == []
+
+
+def test_imagenes_a_pdf_rechaza_formato_no_admitido(tmp_path: Path) -> None:
+    conversor = FakeConversorImagenes()
+    rutas = _imagenes(tmp_path, "a.png", "documento.docx")
+
+    with pytest.raises(ErrorDominio):
+        ConvertirImagenesAPdf(conversor).ejecutar(rutas, tmp_path / "s.pdf")
+    assert conversor.conversiones == []  # ni una sola imagen se convierte
+
+
+def test_imagenes_a_pdf_rechaza_fichero_inexistente(tmp_path: Path) -> None:
+    conversor = FakeConversorImagenes()
+
+    with pytest.raises(DocumentoNoEncontrado):
+        ConvertirImagenesAPdf(conversor).ejecutar(
+            [tmp_path / "fantasma.png"], tmp_path / "s.pdf"
+        )
     assert conversor.conversiones == []

@@ -307,3 +307,15 @@ class FakeConversorWord:
         if progreso is not None:
             progreso(1, 1)
         self.conversiones.append((ruta_docx, destino))
+
+
+class FakeConversorImagenes:
+    """Fake en memoria de `ConversorImagenes`. Registra orden y ajuste."""
+
+    def __init__(self) -> None:
+        self.conversiones: list[tuple[tuple[Path, ...], Path, object]] = []
+
+    def a_pdf(self, rutas, destino, ajuste, config, progreso=None):  # type: ignore[no-untyped-def]
+        if progreso is not None:
+            progreso(len(rutas), len(rutas))
+        self.conversiones.append((tuple(rutas), destino, ajuste))

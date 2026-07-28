@@ -53,6 +53,7 @@ from lectorpdf.adapters.pyhanko.signature_service import PyHankoSignatureService
 from lectorpdf.adapters.pymupdf.anotaciones import PyMuPDFAnotaciones
 from lectorpdf.adapters.pymupdf.contenido import PyMuPDFContenido
 from lectorpdf.adapters.pymupdf.conversor import ConversorFitz
+from lectorpdf.adapters.pymupdf.conversor_imagenes import ConversorImagenesFitz
 from lectorpdf.adapters.pymupdf.document_repository import PyMuPDFDocumentRepository
 from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
@@ -74,6 +75,7 @@ from lectorpdf.core.domain.anotaciones import (
     TipoMarcado,
 )
 from lectorpdf.core.domain.contenido import Coincidencia
+from lectorpdf.core.domain.conversion import EXTENSIONES_IMAGEN
 from lectorpdf.core.domain.errores import (
     ErrorDominio,
     FormularioXFANoSoportado,
@@ -90,6 +92,7 @@ from lectorpdf.core.use_cases.anadir_texto import AnadirTexto
 from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.comprobar_actualizacion import ComprobarActualizacion
+from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
@@ -126,6 +129,7 @@ from lectorpdf.ui.busqueda.barra_busqueda import BarraBusqueda
 from lectorpdf.ui.busqueda.busqueda_layer import BusquedaLayer
 from lectorpdf.ui.controles.control_pagina import ControlPagina
 from lectorpdf.ui.controles.control_zoom import ControlZoom
+from lectorpdf.ui.conversion.imagenes_dialog import ConversionImagenesDialog
 from lectorpdf.ui.conversion.saliente_dialog import ConversionSalienteDialog
 from lectorpdf.ui.conversion.word_dialog import ConversionWordDialog
 from lectorpdf.ui.enlaces.enlaces_layer import EnlacesLayer
@@ -222,6 +226,7 @@ class MainWindow(QMainWindow):
         self._servicio_anotaciones = PyMuPDFAnotaciones(self._registro)
         self._conversor = ConversorFitz(self._registro)
         self._conversor_word = ConversorWordQt()
+        self._conversor_imagenes = ConversorImagenesFitz()
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -254,6 +259,7 @@ class MainWindow(QMainWindow):
         self._obtener_propiedades = ObtenerPropiedades(self._servicio_contenido)
         self._es_escaneado = EsPdfEscaneado(self._conversor)
         self._word_a_pdf = ConvertirWordAPdf(self._conversor_word)
+        self._imagenes_a_pdf = ConvertirImagenesAPdf(self._conversor_imagenes)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
@@ -998,8 +1004,13 @@ class MainWindow(QMainWindow):
         self._accion_menu(menu, "Imprimir…", self._imprimir, "Ctrl+P")
         self._accion_menu(menu, "Vista previa de impresión…", self._vista_previa_impresion)
         menu.addSeparator()
+        # Simétrico a Documento → "Convertir a": aquí entra lo que se vuelve PDF.
+        entrantes = menu.addMenu("Convertir a PDF")
         self._accion_menu(
-            menu, "Convertir Word a PDF (reformateado)…", self._convertir_word_a_pdf
+            entrantes, "Desde Word (reformateado)…", self._convertir_word_a_pdf
+        )
+        self._accion_menu(
+            entrantes, "Desde imágenes…", self._convertir_imagenes_a_pdf
         )
         menu.addSeparator()
         accion_sesion = QAction("Restaurar sesión al arrancar", self)
@@ -1988,6 +1999,44 @@ class MainWindow(QMainWindow):
             self,
             "Conversión completada",
             f"PDF guardado en:\n{destino}\n\n¿Abrirlo ahora?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if respuesta == QMessageBox.StandardButton.Yes:
+            self.abrir_ruta_con_aviso(destino)
+
+    def _convertir_imagenes_a_pdf(self) -> None:
+        filtro = "Imágenes (" + " ".join(f"*{e}" for e in EXTENSIONES_IMAGEN) + ")"
+        elegidas, _ = QFileDialog.getOpenFileNames(
+            self, "Elegir imágenes", "", filtro
+        )
+        if not elegidas:
+            return
+        dialogo = ConversionImagenesDialog([Path(r) for r in elegidas], self)
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        rutas = dialogo.rutas()
+        if not rutas:
+            return
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF", f"{rutas[0].stem}.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        res = ejecutar_con_progreso(
+            self,
+            "Convirtiendo imágenes a PDF…",
+            lambda p: self._imagenes_a_pdf.ejecutar(
+                rutas, destino, dialogo.ajuste(), dialogo.config(), p
+            ),
+        )
+        if res.cancelado or res.error is not None:
+            self._tras_tarea(res, "")
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Conversión completada",
+            f"PDF de {len(rutas)} páginas guardado en:\n{destino}\n\n¿Abrirlo ahora?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if respuesta == QMessageBox.StandardButton.Yes:

@@ -67,7 +67,9 @@ _ESPERADAS: dict[str, str | None] = {
     "HTML (.html)…": None,
     "Texto plano (.txt)…": None,
     "Imágenes PNG…": None,
-    "Convertir Word a PDF (reformateado)…": None,
+    # Archivo → Convertir a PDF (entrantes)
+    "Desde Word (reformateado)…": None,
+    "Desde imágenes…": None,
     # Firmas
     "Firmar (dibujar y estampar)…": None,
     "Firmar con certificado…": None,
@@ -188,7 +190,10 @@ def test_conversiones_salientes_deshabilitadas_sin_documento(
         )
         # Sin documento: las salientes deshabilitadas; Word→PDF (externo) habilitada.
         assert all(not acciones[t].isEnabled() for t in salientes)  # type: ignore[attr-defined]
-        assert acciones["Convertir Word a PDF (reformateado)…"].isEnabled()  # type: ignore[attr-defined]
+        # Las entrantes no dependen del documento abierto: operan sobre ficheros
+        # externos, así que siguen disponibles sin documento.
+        assert acciones["Desde Word (reformateado)…"].isEnabled()  # type: ignore[attr-defined]
+        assert acciones["Desde imágenes…"].isEnabled()  # type: ignore[attr-defined]
 
         # Con documento abierto: las salientes se habilitan.
         ventana.abrir_ruta(_pdf_min(tmp_path))
