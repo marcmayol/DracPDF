@@ -4,9 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtGui import QColor
+
 from lectorpdf.core.domain.modelos import Documento, ImagenRenderizada, Pagina
 from lectorpdf.core.use_cases.renderizar_pagina import RenderizarPagina
-from lectorpdf.ui.thumbnails.thumbnail_panel import ThumbnailPanel
+from lectorpdf.ui.theme.tokens import PAPEL
+from lectorpdf.ui.thumbnails.thumbnail_panel import (
+    ANCHO_MINIATURA_PT_A_PX,
+    ThumbnailPanel,
+)
 from tests.core.fakes import FakeDocumentRepository
 
 
@@ -47,6 +53,37 @@ def test_no_renderiza_todas_las_miniaturas_de_un_documento_grande(qapp: object) 
 
     assert len(panel.miniaturas_renderizadas()) < 200
     assert len(repo.render_llamadas) == len(panel.miniaturas_renderizadas())
+
+
+def test_la_miniatura_es_opaca_sobre_el_papel(qapp: object) -> None:
+    """El render llega transparente; la miniatura debe componerlo sobre papel o
+    con el tema oscuro la página se vuelve invisible."""
+    documento = _documento(3)
+    panel, _ = _panel(documento)
+    panel.resize(180, 700)
+    panel.show()
+
+    panel.set_documento(documento)
+
+    item = panel.item(0)
+    assert item is not None
+    pixmap = item.icon().pixmap(panel.iconSize())
+    imagen_qt = pixmap.toImage()
+    centro = imagen_qt.pixelColor(imagen_qt.width() // 2, imagen_qt.height() // 2)
+    assert centro.alpha() == 255
+    assert centro == QColor(PAPEL)
+
+
+def test_el_alto_del_icono_sigue_la_proporcion_de_la_pagina(qapp: object) -> None:
+    """Páginas de 100x200 pt: la caja del icono mide el doble de alto que ancho,
+    sin hueco muerto bajo la miniatura."""
+    documento = _documento(3)
+    panel, _ = _panel(documento)
+
+    panel.set_documento(documento)
+
+    assert panel.iconSize().width() == ANCHO_MINIATURA_PT_A_PX
+    assert panel.iconSize().height() == ANCHO_MINIATURA_PT_A_PX * 2
 
 
 def test_seleccionar_pagina_no_reemite_la_senal(qapp: object) -> None:
