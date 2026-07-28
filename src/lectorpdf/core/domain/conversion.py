@@ -38,6 +38,15 @@ class AjusteImagen(Enum):
     PAGINA_FIJA = auto()
 
 
+#: Extensiones de texto que se convierten a PDF por la cadena Qt.
+EXTENSIONES_TEXTO: tuple[str, ...] = (
+    ".md",
+    ".markdown",
+    ".html",
+    ".htm",
+    ".txt",
+)
+
 #: Extensiones de imagen que el motor sabe abrir (las de MuPDF).
 EXTENSIONES_IMAGEN: tuple[str, ...] = (
     ".png",

@@ -14,11 +14,13 @@ from lectorpdf.core.use_cases.convertir_a_html import ConvertirAHtml
 from lectorpdf.core.use_cases.convertir_a_markdown import ConvertirAMarkdown
 from lectorpdf.core.use_cases.convertir_a_word import ConvertirAWord
 from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
+from lectorpdf.core.use_cases.convertir_texto_a_pdf import ConvertirTextoAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.es_pdf_escaneado import EsPdfEscaneado
 from tests.core.fakes import (
     FakeConversorImagenes,
     FakeConversorPDF,
+    FakeConversorTexto,
     FakeConversorWord,
 )
 
@@ -116,6 +118,36 @@ def test_imagenes_a_pdf_rechaza_formato_no_admitido(tmp_path: Path) -> None:
     with pytest.raises(ErrorDominio):
         ConvertirImagenesAPdf(conversor).ejecutar(rutas, tmp_path / "s.pdf")
     assert conversor.conversiones == []  # ni una sola imagen se convierte
+
+
+@pytest.mark.parametrize("nombre", ["notas.md", "pagina.HTML", "leeme.txt"])
+def test_texto_a_pdf_admite_markdown_html_y_txt(tmp_path: Path, nombre: str) -> None:
+    conversor = FakeConversorTexto()
+    origen = tmp_path / nombre
+    origen.write_text("contenido", encoding="utf-8")
+    destino = tmp_path / "s.pdf"
+
+    ConvertirTextoAPdf(conversor).ejecutar(origen, destino)
+
+    assert conversor.conversiones == [(origen, destino)]
+
+
+def test_texto_a_pdf_rechaza_otras_extensiones(tmp_path: Path) -> None:
+    conversor = FakeConversorTexto()
+    origen = tmp_path / "hoja.csv"
+    origen.write_text("a;b", encoding="utf-8")
+
+    with pytest.raises(ErrorDominio):
+        ConvertirTextoAPdf(conversor).ejecutar(origen, tmp_path / "s.pdf")
+    assert conversor.conversiones == []
+
+
+def test_texto_a_pdf_rechaza_fichero_inexistente(tmp_path: Path) -> None:
+    conversor = FakeConversorTexto()
+
+    with pytest.raises(DocumentoNoEncontrado):
+        ConvertirTextoAPdf(conversor).ejecutar(tmp_path / "no.md", tmp_path / "s.pdf")
+    assert conversor.conversiones == []
 
 
 def test_imagenes_a_pdf_rechaza_fichero_inexistente(tmp_path: Path) -> None:

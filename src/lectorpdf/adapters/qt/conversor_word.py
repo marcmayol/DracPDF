@@ -10,13 +10,12 @@ Vive fuera del core: el caso de uso solo conoce el puerto.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import mammoth
-from PySide6.QtCore import QMarginsF, QSizeF
-from PySide6.QtGui import QPageLayout, QPageSize, QPdfWriter, QTextDocument
+from PySide6.QtGui import QTextDocument
 
+from lectorpdf.adapters.qt.escritura_pdf import escribir_pdf
 from lectorpdf.core.domain.conversion import ConfigPagina
 from lectorpdf.core.domain.herramientas import Progreso
 
@@ -34,22 +33,6 @@ class ConversorWordQt:
 
         documento = QTextDocument()
         documento.setHtml(html)
-
-        tmp = destino.with_name(destino.name + ".tmp")
-        escritor = QPdfWriter(str(tmp))
-        escritor.setPageSize(
-            QPageSize(
-                QSizeF(config.ancho_mm, config.alto_mm), QPageSize.Unit.Millimeter
-            )
-        )
-        margen = QMarginsF(
-            config.margen_mm, config.margen_mm, config.margen_mm, config.margen_mm
-        )
-        escritor.setPageMargins(margen, QPageLayout.Unit.Millimeter)
-
-        # El QTextDocument pagina sobre el área imprimible del escritor.
-        documento.print_(escritor)
-        del escritor  # cierra el fichero antes del replace (Windows)
-        os.replace(tmp, destino)
+        escribir_pdf(documento, destino, config)
         if progreso is not None:
             progreso(1, 1)  # conversión en un paso

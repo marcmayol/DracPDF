@@ -59,6 +59,7 @@ from lectorpdf.adapters.pymupdf.estampado_service import PyMuPDFEstampadoService
 from lectorpdf.adapters.pymupdf.form_service import PyMuPDFFormService
 from lectorpdf.adapters.pymupdf.herramientas import PyMuPDFHerramientas
 from lectorpdf.adapters.pymupdf.registro import RegistroDocumentos
+from lectorpdf.adapters.qt.conversor_texto import ConversorTextoQt
 from lectorpdf.adapters.qt.conversor_word import ConversorWordQt
 from lectorpdf.adapters.red.actualizador_http import ActualizadorHTTP
 from lectorpdf.core.domain.actualizacion import (
@@ -93,6 +94,7 @@ from lectorpdf.core.use_cases.buscar_en_documento import BuscarEnDocumento
 from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.comprobar_actualizacion import ComprobarActualizacion
 from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
+from lectorpdf.core.use_cases.convertir_texto_a_pdf import ConvertirTextoAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
 from lectorpdf.core.use_cases.desproteger_pdf import DesprotegerPdf
@@ -227,6 +229,7 @@ class MainWindow(QMainWindow):
         self._conversor = ConversorFitz(self._registro)
         self._conversor_word = ConversorWordQt()
         self._conversor_imagenes = ConversorImagenesFitz()
+        self._conversor_texto = ConversorTextoQt()
 
         self._abrir = AbrirDocumento(self._repositorio)
         self._renderizar = RenderizarPagina(self._repositorio)
@@ -260,6 +263,7 @@ class MainWindow(QMainWindow):
         self._es_escaneado = EsPdfEscaneado(self._conversor)
         self._word_a_pdf = ConvertirWordAPdf(self._conversor_word)
         self._imagenes_a_pdf = ConvertirImagenesAPdf(self._conversor_imagenes)
+        self._texto_a_pdf = ConvertirTextoAPdf(self._conversor_texto)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
@@ -1008,6 +1012,15 @@ class MainWindow(QMainWindow):
         entrantes = menu.addMenu("Convertir a PDF")
         self._accion_menu(
             entrantes, "Desde Word (reformateado)…", self._convertir_word_a_pdf
+        )
+        self._accion_menu(
+            entrantes, "Desde Markdown (.md)…", lambda: self._convertir_texto_a_pdf("md")
+        )
+        self._accion_menu(
+            entrantes, "Desde HTML…", lambda: self._convertir_texto_a_pdf("html")
+        )
+        self._accion_menu(
+            entrantes, "Desde texto plano (.txt)…", lambda: self._convertir_texto_a_pdf("txt")
         )
         self._accion_menu(
             entrantes, "Desde imágenes…", self._convertir_imagenes_a_pdf
@@ -1989,6 +2002,51 @@ class MainWindow(QMainWindow):
         try:
             self._word_a_pdf.ejecutar(ruta, destino, config)
         except Exception as exc:  # errores de mammoth/Qt al convertir
+            error = exc
+        finally:
+            QApplication.restoreOverrideCursor()
+        if error is not None:
+            QMessageBox.warning(self, "No se pudo convertir", str(error))
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Conversión completada",
+            f"PDF guardado en:\n{destino}\n\n¿Abrirlo ahora?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if respuesta == QMessageBox.StandardButton.Yes:
+            self.abrir_ruta_con_aviso(destino)
+
+    #: Filtro de fichero y título por formato de entrada de texto.
+    _ENTRADAS_TEXTO: dict[str, tuple[str, str]] = {
+        "md": ("Elegir Markdown", "Markdown (*.md *.markdown)"),
+        "html": ("Elegir página HTML", "Página web (*.html *.htm)"),
+        "txt": ("Elegir texto plano", "Texto (*.txt)"),
+    }
+
+    def _convertir_texto_a_pdf(self, formato: str) -> None:
+        titulo, filtro = self._ENTRADAS_TEXTO[formato]
+        ruta_str, _ = QFileDialog.getOpenFileName(self, titulo, "", filtro)
+        if not ruta_str:
+            return
+        ruta = Path(ruta_str)
+        dialogo = ConversionWordDialog(self)  # mismo tamaño de página y margen
+        dialogo.setWindowTitle(f"{titulo.replace('Elegir', 'Convertir')} a PDF")
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return
+        config = dialogo.config()
+        destino_str, _ = QFileDialog.getSaveFileName(
+            self, "Guardar PDF", f"{ruta.stem}.pdf", "Documentos PDF (*.pdf)"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        # Como Word→PDF: QTextDocument/QPdfWriter son GUI, van en el hilo principal.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        error: Exception | None = None
+        try:
+            self._texto_a_pdf.ejecutar(ruta, destino, config)
+        except Exception as exc:  # errores de lectura o de Qt al convertir
             error = exc
         finally:
             QApplication.restoreOverrideCursor()
