@@ -120,3 +120,72 @@ def test_documento_sin_tablas_no_escribe_nada(tmp_path: Path) -> None:
 
     assert rutas == []
     assert not any(salida.glob("*.csv"))
+
+
+# -- Volcado del texto entero a hoja de cálculo -----------------------------
+#
+# Aquí no se detecta nada: se comprueba que lo que sale se parece al documento
+# línea a línea, incluida la tabla que la detección por líneas no ve.
+
+
+def test_csv_del_texto_entero_respeta_lineas_y_columnas(tmp_path: Path) -> None:
+    servicio, doc_id = _servicio(_pdf_con_tablas(tmp_path / "t.pdf"))
+    destino = tmp_path / "todo.csv"
+
+    escrito = servicio.exportar_texto_como_hoja(doc_id, destino, FormatoTabla.CSV)
+
+    assert escrito == destino
+    with open(destino, encoding="utf-8-sig", newline="") as fichero:
+        filas = list(csv.reader(fichero, delimiter=";"))
+    # Las dos páginas del fixture llevan las mismas tres filas.
+    assert filas[:3] == _FILAS
+    assert len(filas) == 2 * len(_FILAS)
+
+
+def test_xlsx_del_texto_entero_pone_una_hoja_por_pagina(tmp_path: Path) -> None:
+    servicio, doc_id = _servicio(_pdf_con_tablas(tmp_path / "t.pdf"))
+    destino = tmp_path / "todo.xlsx"
+
+    escrito = servicio.exportar_texto_como_hoja(doc_id, destino, FormatoTabla.XLSX)
+
+    assert escrito == destino
+
+    from openpyxl import load_workbook
+
+    libro = load_workbook(destino)
+    try:
+        assert libro.sheetnames == ["Página 1", "Página 2"]
+        hoja = libro["Página 1"]
+        assert [c.value for c in hoja[1]] == _FILAS[0]
+        assert hoja.max_row == len(_FILAS)
+    finally:
+        libro.close()
+
+
+def test_un_parrafo_corriente_no_se_trocea_en_celdas(tmp_path: Path) -> None:
+    ruta = tmp_path / "parrafo.pdf"
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 100), "Solo un párrafo suelto.", fontsize=11)
+    doc.save(ruta)
+    doc.close()
+    servicio, doc_id = _servicio(ruta)
+    destino = tmp_path / "p.csv"
+
+    servicio.exportar_texto_como_hoja(doc_id, destino, FormatoTabla.CSV)
+
+    with open(destino, encoding="utf-8-sig", newline="") as fichero:
+        filas = list(csv.reader(fichero, delimiter=";"))
+    assert filas == [["Solo un párrafo suelto."]]
+
+
+def test_un_pdf_sin_texto_no_deja_fichero(tmp_path: Path) -> None:
+    ruta = tmp_path / "sin_texto.pdf"
+    doc = fitz.open()
+    doc.new_page()  # una página en blanco: ni una palabra
+    doc.save(ruta)
+    doc.close()
+    servicio, doc_id = _servicio(ruta)
+    destino = tmp_path / "vacio.xlsx"
+
+    assert servicio.exportar_texto_como_hoja(doc_id, destino, FormatoTabla.XLSX) is None
+    assert not destino.exists()
