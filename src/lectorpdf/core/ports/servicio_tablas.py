@@ -34,3 +34,17 @@ class ServicioTablas(Protocol):
         estrategia: EstrategiaTablas = EstrategiaTablas.LINEAS,
         progreso: Progreso | None = None,
     ) -> list[Path]: ...
+
+    def exportar_texto_como_hoja(
+        self,
+        documento_id: str,
+        destino: Path,
+        formato: FormatoTabla,
+        progreso: Progreso | None = None,
+    ) -> Path | None:
+        """Vuelca todo el texto del documento a un único fichero.
+
+        Sin detectar tablas: cada línea es una fila. Devuelve `None` si el
+        documento no tiene ni una palabra (un escaneado, por ejemplo), para que
+        el caso de uso lo diga en vez de dejar un fichero vacío."""
+        ...
