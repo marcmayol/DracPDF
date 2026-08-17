@@ -252,6 +252,25 @@ Amplía el abanico en las dos direcciones, sobre el submenú unificado "Converti
 
 **Criterio de aceptación:** script de verificación sin red que, en salida, convierte un PDF de fixture a PNG/JPEG/WEBP/TIFF/SVG comprobando el número de ficheros y su cabecera mágica, vuelca a CSV y XLSX una tabla conocida comparando celda a celda, y genera ODT y RTF que al releerse (zip + XML el primero, el parser propio el segundo) devuelven el texto esperado; y en entrada, convierte imágenes, Markdown, HTML, texto, ODT y RTF a PDF verificando el número de páginas y el texto extraíble, y demuestra que un `.doc` elegido produce el mensaje guía y ningún fichero; todo con exit 0. Inventario de acciones en verde, pytest en verde y git log con un commit por tarea.
 
+### Fase 12: Excel y CSV de todo el documento
+
+La Fase 11 dejó las hojas de cálculo atadas a la **detección de tablas**, y esa detección falla justo donde más se usa: una tabla alineada con espacios no la ve la estrategia de líneas, y la aproximada trocea párrafos. Resultado práctico: quien quería su PDF en Excel se encontraba con "no se ha encontrado ninguna tabla". Esta fase añade el camino simple, que no detecta nada.
+
+1. **Volcado del texto a hoja de cálculo**: cada línea del documento es una fila y se abre una columna donde el papel deja un hueco ancho (`HUECO_COLUMNA_PT`, 6 pt: más que un espacio, menos que una columna). Lo que esté alineado cae en columnas; lo demás es una frase en una celda
+2. **Las filas se agrupan por altura, no por el bloque que declara el PDF**: las celdas de una tabla suelen venir en bloques distintos aunque se lean seguidas, y agrupando por bloque cada celda salía en su propia fila. Dos palabras van juntas si sus bandas verticales se solapan más de la mitad de la más baja
+3. **Excel con una hoja por página** (`Página N`) y **CSV seguido**, sin columna de página ni separadores: un CSV con adornos hay que limpiarlo a mano después
+4. **Un solo diálogo**: solo se pregunta dónde guardar; el formato sale de la extensión escrita, y del filtro elegido si no hay ninguna. Sin estrategia que elegir, porque no hay nada que deducir
+5. **PDF sin texto** (escaneado): el aviso de siempre antes de convertir, y si aun así no hay ni una palabra, se dice y no se deja fichero vacío
+6. **Menú**: Documento → Convertir a → "Excel o CSV (todo el texto)…" junto a "Excel o CSV (solo las tablas)…", que es la salida de la Fase 11 renombrada para que se entienda la diferencia de un vistazo
+
+#### Reglas propias de esta fase
+- El reparto en filas y columnas es lógica de dominio pura (`core/domain/tablas.py`), probada sin PyMuPDF: el adaptador solo extrae palabras y escribe el fichero
+- Sin dependencias nuevas: openpyxl ya entró en la Fase 11
+- Salida atómica (temporal + `replace`), como todo lo que escribe fichero
+- Documentos FIRMADOS: permitido (lee, no modifica)
+
+**Criterio de aceptación:** `scripts/verificar_texto_a_hoja.py` sin red que convierte un PDF de fixture a XLSX y CSV y compara celda a celda la tabla con líneas, la tabla alineada solo con espacios y un párrafo corriente que no debe trocearse; comprueba una hoja por página en Excel y el documento seguido en CSV; y que un PDF sin texto avisa sin dejar fichero. Todo con exit 0, inventario de acciones en verde y pytest en verde.
+
 ## Reglas para la implementación
 - El core no puede importar PySide6 ni PyMuPDF ni pyHanko; solo los adaptadores
 - Cada caso de uso con test unitario usando fakes de los puertos
