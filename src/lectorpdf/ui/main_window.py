@@ -101,6 +101,7 @@ from lectorpdf.core.use_cases.comprimir_pdf import ComprimirPdf
 from lectorpdf.core.use_cases.comprobar_actualizacion import ComprobarActualizacion
 from lectorpdf.core.use_cases.convertir_imagenes_a_pdf import ConvertirImagenesAPdf
 from lectorpdf.core.use_cases.convertir_tablas import ConvertirTablas, DetectarTablas
+from lectorpdf.core.use_cases.convertir_texto_a_hoja import ConvertirTextoAHoja
 from lectorpdf.core.use_cases.convertir_texto_a_pdf import ConvertirTextoAPdf
 from lectorpdf.core.use_cases.convertir_word_a_pdf import ConvertirWordAPdf
 from lectorpdf.core.use_cases.corregir_texto import CorregirTexto
@@ -278,6 +279,7 @@ class MainWindow(QMainWindow):
         self._texto_a_pdf = ConvertirTextoAPdf(self._conversor_texto)
         self._detectar_tablas = DetectarTablas(self._servicio_tablas)
         self._convertir_tablas_caso = ConvertirTablas(self._servicio_tablas)
+        self._convertir_texto_hoja = ConvertirTextoAHoja(self._servicio_tablas)
 
         self._tema = cargar_tema_preferido()
         self._prefs = QSettings(AJUSTES_ORG, AJUSTES_APP)
@@ -989,8 +991,11 @@ class MainWindow(QMainWindow):
             submenu, "Texto plano (.txt)…", self._convertir_a_texto
         )
         submenu.addSeparator()
+        self._accion_convertir_hoja = self._accion_menu(
+            submenu, "Excel o CSV (todo el texto)…", self._convertir_texto_a_hoja
+        )
         self._accion_convertir_tablas = self._accion_menu(
-            submenu, "Tablas (CSV, Excel)…", self._convertir_tablas
+            submenu, "Excel o CSV (solo las tablas)…", self._convertir_tablas
         )
         submenu.addSeparator()
         self._accion_convertir_png = self._accion_menu(
@@ -1901,6 +1906,36 @@ class MainWindow(QMainWindow):
         )
         QMessageBox.information(self, "Hecho", f"Convertidas {detalle}")
 
+    def _convertir_texto_a_hoja(self) -> None:
+        """Todo el texto a una hoja de cálculo. Solo pregunta dónde guardarlo:
+        no hay tablas que detectar ni estrategia que elegir."""
+        titulo = "Convertir a Excel o CSV"
+        doc = self._documento_o_aviso(titulo)
+        if doc is None:
+            return
+        if self._es_escaneado.ejecutar(doc) and not self._confirmar_escaneado(titulo):
+            return
+        filtro_csv = "CSV (*.csv)"
+        destino_str, filtro = QFileDialog.getSaveFileName(
+            self, titulo, f"{doc.ruta.stem}.xlsx", f"Excel (*.xlsx);;{filtro_csv}"
+        )
+        if not destino_str:
+            return
+        destino = Path(destino_str)
+        # Manda la extensión escrita; si no hay ninguna, el filtro elegido.
+        es_csv = destino.suffix.lower() == ".csv" or (
+            not destino.suffix and filtro == filtro_csv
+        )
+        formato = FormatoTabla.CSV if es_csv else FormatoTabla.XLSX
+        if not destino.suffix:
+            destino = destino.with_suffix(formato.extension)
+        res = ejecutar_con_progreso(
+            self,
+            "Convirtiendo el texto…",
+            lambda p: self._convertir_texto_hoja.ejecutar(doc, destino, formato, p),
+        )
+        self._tras_tarea(res, f"Guardado en:\n{destino}")
+
     def _convertir_a_imagenes(self) -> None:
         doc = self._documento_o_aviso("Convertir a imágenes")
         if doc is None:
@@ -1961,6 +1996,7 @@ class MainWindow(QMainWindow):
             self._accion_convertir_md,
             self._accion_convertir_texto,
             self._accion_convertir_tablas,
+            self._accion_convertir_hoja,
             self._accion_convertir_png,
         ):
             accion.setEnabled(hay)

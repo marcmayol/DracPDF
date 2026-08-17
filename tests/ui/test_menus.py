@@ -62,7 +62,8 @@ def test_convertir_a_agrupa_todas_las_salidas(qapp: object) -> None:
         "Markdown (.md)…",
         "HTML (.html)…",
         "Texto plano (.txt)…",
-        "Tablas (CSV, Excel)…",
+        "Excel o CSV (todo el texto)…",
+        "Excel o CSV (solo las tablas)…",
         "Imágenes (PNG, JPEG, WEBP, TIFF, SVG)…",
     ]
 
