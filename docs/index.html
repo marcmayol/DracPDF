@@ -43,7 +43,7 @@
     <h1 style="margin:28px 0 0; font-size:44px; font-weight:650; letter-spacing:-0.015em; line-height:1.15; max-width:760px; text-wrap:balance;">Las cosas serias con PDF, en una sola app de escritorio</h1>
     <p style="margin:18px 0 0; font-size:16.5px; color:#B9BFCC; line-height:1.6; max-width:620px; text-wrap:pretty;">Visor completo con rellenado de formularios, firma dibujada a mano y <strong style="color:#E9EBF0;">firma digital con certificado (PAdES)</strong>. Funciona en local — sin nube ni cuenta.</p>
     <div style="display:flex; gap:12px; margin-top:30px; align-items:center; flex-wrap:wrap; justify-content:center;">
-      <a href="https://github.com/marcmayol/DracPDF/releases/latest" class="btn-dl">Descargar para Windows</a>
+      <a id="descarga-hero" href="https://github.com/marcmayol/DracPDF/releases/latest" class="btn-dl">Descargar para Windows</a>
       <a href="https://github.com/marcmayol/DracPDF" class="btn-gh">Ver en GitHub</a>
     </div>
     <div style="margin-top:14px; font-size:12.5px; color:#6A7080;">Gratis para uso no comercial · instalación por usuario, sin permisos de administrador</div>
@@ -170,7 +170,7 @@
     <h2 id="descargar" style="margin:22px 0 0; font-size:26px; font-weight:650;">Código visible, uso no comercial</h2>
     <p style="margin:14px 0 0; font-size:14px; color:#98A0B0; line-height:1.65; max-width:560px; text-wrap:pretty;">Puedes usar, copiar, modificar y redistribuir DracPDF con fines no comerciales; la explotación comercial queda reservada al titular. No es «open source» en sentido estricto — ese término no admite restricciones de uso comercial. Detalle en la <a href="https://github.com/marcmayol/DracPDF/blob/main/LICENSE">licencia</a>.</p>
     <div style="display:flex; gap:12px; margin-top:28px; flex-wrap:wrap; justify-content:center;">
-      <a href="https://github.com/marcmayol/DracPDF/releases/latest" class="btn-dl">Descargar para Windows</a>
+      <a id="descarga-pie" href="https://github.com/marcmayol/DracPDF/releases/latest" class="btn-dl">Descargar para Windows</a>
     </div>
   </section>
 
@@ -182,6 +182,24 @@
     </div>
   </footer>
 </div>
+
+<script>
+  // Los dos botones ya funcionan sin esto: llevan a la última Release. El mismo
+  // manifiesto que usa la app para actualizarse trae la URL exacta del
+  // instalador, así que si está a mano bajamos el .exe de un clic. Si falla, el
+  // enlace se queda como estaba y nadie se entera. El nombre del instalador
+  // lleva la versión dentro, y por eso no se puede escribir aquí a mano: se lee.
+  fetch("updates.json", { cache: "no-store" })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (m) {
+      if (!m.url) return;
+      ["descarga-hero", "descarga-pie"].forEach(function (id) {
+        var boton = document.getElementById(id);
+        if (boton) boton.href = m.url;
+      });
+    })
+    .catch(function () {});
+</script>
 
 </body>
 </html>
